@@ -14,5 +14,5 @@
 .env
 *.log
 
-ActivePerl/
-screenshots/
+/ActivePerl/
+/screenshots/
