@@ -1,13 +1,14 @@
 services:
   db:
     image: mariadb:10.11
+    container_name: hlx-db
     restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: root_password
-      MYSQL_DATABASE: hlstatsx
-      MYSQL_USER: hlstatsx
-      MYSQL_PASSWORD: hlstatsx_password
-      HLX_PROXY_KEY: "d7fe18f9c4d10180f2aa6393"
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASS:-root_password}
+      MYSQL_DATABASE: ${DB_NAME:-hlstatsx}
+      MYSQL_USER: ${DB_USER:-hlstatsx}
+      MYSQL_PASSWORD: ${DB_PASS:-hlstatsx_password}
+      HLX_PROXY_KEY: ${PROXY_KEY:-dummy_key}
     volumes:
       - hlx-db-data:/var/lib/mysql
       - ./src/sql/install.sql:/tmp/install.sql:ro
@@ -17,9 +18,10 @@ services:
     build:
       context: .
       dockerfile: docker/web/Dockerfile
+    container_name: hlx-web
     restart: always
     ports:
-      - "80:80"
+      - "${WEB_PORT:-80}:80"
     depends_on:
       - db
 
@@ -27,26 +29,38 @@ services:
     build:
       context: .
       dockerfile: docker/daemon/Dockerfile
+    container_name: hlx-daemon
     restart: always
     depends_on:
       - db
     ports:
-      - "27500:27500/udp"
+      - "${DAEMON_PORT:-27500}:27500/udp"
+    environment:
+      - DB_NAME=${DB_NAME:-hlstatsx}
+      - DB_USER=${DB_USER:-hlstatsx}
+      - DB_PASS=${DB_PASS:-hlstatsx_password}
+      - DAEMON_PORT=27500
 
   forwarder:
     build:
       context: .
       dockerfile: docker/forwarder/Dockerfile
+    container_name: hlx-forwarder
     restart: always
     environment:
-      PROXY_KEY: "d7fe18f9c4d10180f2aa6393"
-      GAME_IP: "192.168.2.99"
-      GAME_PORT: "27015"
+      - PROXY_KEY=${PROXY_KEY:-dummy_key}
+      - GAME_SERVER_IP=${GAME_SERVER_IP:-127.0.0.1}
+      - GAME_SERVER_PORT=${GAME_SERVER_PORT:-27015}
+      - DAEMON_HOST=${DAEMON_HOST:-hlx-daemon}
+      - DAEMON_PORT=27500
+    ports:
+      - "${FORWARDER_PORT:-27501}:${FORWARDER_PORT:-27501}/udp"
     command: >
-      -forward.proxy-key d7fe18f9c4d10180f2aa6393
-      -forward.gameserver-ip 192.168.2.99
-      -forward.gameserver-port 27015
-      -forward.to-addr daemon:27500
+      -listen-address :${FORWARDER_PORT:-27501}
+      -udp.forward-address ${DAEMON_HOST:-hlx-daemon}:27500
+      -forward.proxy-key ${PROXY_KEY:-dummy_key}
+      -forward.gameserver-ip ${GAME_SERVER_IP:-127.0.0.1}
+      -forward.gameserver-port ${GAME_SERVER_PORT:-27015}
 
 volumes:
   hlx-db-data:
