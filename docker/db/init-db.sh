@@ -1,5 +1,6 @@
 #!/bin/bash
 sed -i 's/\r$//' /docker-entrypoint-initdb.d/init-db.sh
+sed -i 's/\r$//' /tmp/install.sql
 set -e
 mariadb -u root -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE" < /tmp/install.sql
 mariadb -u root -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE" <<-EOSQL

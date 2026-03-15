@@ -14,9 +14,13 @@ RUN sed -ri -e 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf
 RUN a2enmod rewrite
 COPY src/web /var/www/
 
-RUN sed -i 's/\r$//' /var/www/config.php && \
-    sed -i "s/'localhost'/'hlx-db'/g" /var/www/config.php || true
-
-RUN chown -R www-data:www-data /var/www/
+RUN find /var/www -type f -name "*.php" -exec sed -i 's/\r$//' {} + && \
+    chown -R www-data:www-data /var/www/
 
 WORKDIR /var/www/
+
+CMD sed -i "s/define('DB_ADDR', '.*');/define('DB_ADDR', 'hlx-db');/g" /var/www/config.php && \
+    sed -i "s/define('DB_USER', '.*');/define('DB_USER', '$DB_USER');/g" /var/www/config.php && \
+    sed -i "s/define('DB_PASS', '.*');/define('DB_PASS', '$DB_PASS');/g" /var/www/config.php && \
+    sed -i "s/define('DB_NAME', '.*');/define('DB_NAME', '$DB_NAME');/g" /var/www/config.php && \
+    apache2-foreground
