@@ -10,3 +10,9 @@
 
 /src/web/hlstatsimg/progress
 /src/web/hlstatsimg/graph
+
+.env
+*.log
+
+ActivePerl/
+screenshots/

@@ -9,11 +9,13 @@ RUN cpanm --notest Math::Int64 MaxMind::DB::Reader GeoIP2::Database::Reader Synt
 
 RUN useradd -m hlstats
 WORKDIR /home/hlstats/scripts
+
 COPY src/scripts /home/hlstats/scripts
+COPY docker/daemon/hlx-cron /etc/cron.d/hlx-cron
 
-RUN sed -i 's/DBHost\s*"localhost"/DBHost "db"/' /home/hlstats/scripts/hlstats.conf
-RUN chmod +x /home/hlstats/scripts/*.pl
-RUN chown -R hlstats:hlstats /home/hlstats/scripts
+RUN chmod 0644 /etc/cron.d/hlx-cron && \
+    sed -i 's/DBHost\s*"localhost"/DBHost "db"/' /home/hlstats/scripts/hlstats.conf && \
+    chmod +x /home/hlstats/scripts/*.pl && \
+    chown -R hlstats:hlstats /home/hlstats/scripts
 
-USER hlstats
-CMD until nc -z db 3306; do echo "Waiting for DB..."; sleep 2; done; perl hlstats.pl
+CMD cron && until nc -z db 3306; do echo "Waiting for DB..."; sleep 2; done; su - hlstats -c "cd /home/hlstats/scripts && perl hlstats.pl --port 27500"
