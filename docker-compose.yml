@@ -4,11 +4,11 @@ services:
     container_name: hlx-db
     restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASS:-root_password}
-      MYSQL_DATABASE: ${DB_NAME:-hlstatsx}
-      MYSQL_USER: ${DB_USER:-hlstatsx}
-      MYSQL_PASSWORD: ${DB_PASS:-hlstatsx_password}
-      HLX_PROXY_KEY: ${PROXY_KEY:-dummy_key}
+      MYSQL_ROOT_PASSWORD: "${DB_ROOT_PASS:-root_password}"
+      MYSQL_DATABASE: "${DB_NAME:-hlstatsx}"
+      MYSQL_USER: "${DB_USER:-hlstatsx}"
+      MYSQL_PASSWORD: "${DB_PASS:-hlstatsx_password}"
+      HLX_PROXY_KEY: "${PROXY_KEY:-dummy_key}"
     volumes:
       - hlx-db-data:/var/lib/mysql
       - ./src/sql/install.sql:/tmp/install.sql:ro
@@ -36,10 +36,10 @@ services:
     ports:
       - "${DAEMON_PORT:-27500}:27500/udp"
     environment:
-      - DB_NAME=${DB_NAME:-hlstatsx}
-      - DB_USER=${DB_USER:-hlstatsx}
-      - DB_PASS=${DB_PASS:-hlstatsx_password}
-      - DAEMON_PORT=27500
+      DB_NAME: "${DB_NAME:-hlstatsx}"
+      DB_USER: "${DB_USER:-hlstatsx}"
+      DB_PASS: "${DB_PASS:-hlstatsx_password}"
+      DAEMON_PORT: "27500"
 
   forwarder:
     build:
@@ -48,11 +48,11 @@ services:
     container_name: hlx-forwarder
     restart: always
     environment:
-      - PROXY_KEY=${PROXY_KEY:-dummy_key}
-      - GAME_SERVER_IP=${GAME_SERVER_IP:-127.0.0.1}
-      - GAME_SERVER_PORT=${GAME_SERVER_PORT:-27015}
-      - DAEMON_HOST=${DAEMON_HOST:-hlx-daemon}
-      - DAEMON_PORT=27500
+      PROXY_KEY: "${PROXY_KEY:-dummy_key}"
+      GAME_SERVER_IP: "${GAME_SERVER_IP:-127.0.0.1}"
+      GAME_SERVER_PORT: "${GAME_SERVER_PORT:-27015}"
+      DAEMON_HOST: "${DAEMON_HOST:-hlx-daemon}"
+      DAEMON_PORT: "27500"
     ports:
       - "${FORWARDER_PORT:-27501}:${FORWARDER_PORT:-27501}/udp"
     command: >
