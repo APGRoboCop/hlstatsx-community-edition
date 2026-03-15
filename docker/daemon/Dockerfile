@@ -13,9 +13,16 @@ WORKDIR /home/hlstats/scripts
 COPY src/scripts /home/hlstats/scripts
 COPY docker/daemon/hlx-cron /etc/cron.d/hlx-cron
 
-RUN chmod 0644 /etc/cron.d/hlx-cron && \
-    sed -i 's/DBHost\s*"localhost"/DBHost "db"/' /home/hlstats/scripts/hlstats.conf && \
+RUN sed -i 's/\r$//' /home/hlstats/scripts/hlstats.conf && \
+    sed -i 's/\r$//' /etc/cron.d/hlx-cron && \
+    chmod 0644 /etc/cron.d/hlx-cron && \
     chmod +x /home/hlstats/scripts/*.pl && \
     chown -R hlstats:hlstats /home/hlstats/scripts
 
-CMD cron && until nc -z db 3306; do echo "Waiting for DB..."; sleep 2; done; su - hlstats -c "cd /home/hlstats/scripts && perl hlstats.pl --port 27500"
+CMD sed -i "s/DBHost\s*\".*\"/DBHost \"hlx-db\"/" /home/hlstats/scripts/hlstats.conf && \
+    sed -i "s/DBUsername\s*\".*\"/DBUsername \"$DB_USER\"/" /home/hlstats/scripts/hlstats.conf && \
+    sed -i "s/DBPassword\s*\".*\"/DBPassword \"$DB_PASS\"/" /home/hlstats/scripts/hlstats.conf && \
+    sed -i "s/DBName\s*\".*\"/DBName \"$DB_NAME\"/" /home/hlstats/scripts/hlstats.conf && \
+    cron && \
+    until nc -z hlx-db 3306; do echo "Waiting for DB..."; sleep 2; done; \
+    su hlstats -c "cd /home/hlstats/scripts && perl hlstats.pl --port 27500"
