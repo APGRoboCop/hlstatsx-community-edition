@@ -54,7 +54,7 @@ services:
       DAEMON_HOST: "${DAEMON_HOST:-hlx-daemon}"
       DAEMON_PORT: "27500"
     ports:
-      - "${FORWARDER_PORT:-27501}:${FORWARDER_PORT:-27501}/udp"
+      - "${FORWARDER_PORT:-27501}:27501/udp"
     command: >
       -listen-address :${FORWARDER_PORT:-27501}
       -udp.forward-address ${DAEMON_HOST:-hlx-daemon}:27500
