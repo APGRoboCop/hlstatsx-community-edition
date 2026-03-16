@@ -83,6 +83,10 @@ Detailed installation instructions below on the wikipedia page
 The modernized way to deploy HLStatsX:CE. Featuring automated setup, this version runs a **Debian 13 (Trixie)** and **PHP 8.4** stack inside the container, ensuring seamless compatibility across **Linux, Windows, and macOS**.
 
 ```bash
+# 0. Clone the repository (if not done yet) (linux example)
+git clone https://github.com/lovasatt/hlstatsx-community-edition.git hlstatsx
+cd hlstatsx
+
 # 1. Prepare your environment file
 cp .env.example .env
 
@@ -99,7 +103,7 @@ URL: http://your-server-ip/ (or http://localhost/)
 Default Admin: admin
 Default Password: 123456
 ```
-
+Ensure no other service is using the same ports (default: web 80, daemon 27500, forwarder 26999).
 
 ### Docker Compose
 
@@ -108,12 +112,15 @@ The stack is managed via a single `docker-compose.yml` file. Database initializa
 | Service | Internal Port | External Port | Protocol | Description |
 | :--- | :--- | :--- | :--- | :--- |
 | **Web** | 80 | **80** | TCP | Web Interface (Admin: `admin` / `123456`) |
-| **Forwarder**| 27501 | **27501** | UDP | Connect your gameserver here (`logaddress_add`) |
+| **Forwarder**| 26999 | **26999** | TCP/UDP | Connect your cs2 gameserver here (`+logaddress_add_http "http://your-server-ip:26999"`) |
 | **Daemon** | 27500 | **27500** | UDP | Internal log processor |
 
 - **Automated Init:** The `install.sql` is automatically imported into the MariaDB container on the first run. 
 - **Dynamic Setup:** The `PROXY_KEY` from your `.env` file is automatically injected into the database and configuration files during startup.
-- **Port Conflict:** If port 80 is already in use on your host, change the mapping in `docker-compose.yml` (e.g., `"8080:80"`).
+- **Port Conflict:** If port 80 is already in use on your host, change the mapping in your `.env` (e.g., `WEB_PORT=81`).
+
+Note: Forwarder is required only for Counter-Strike 2. For other Source engine games, direct daemon logging is sufficient.
+When adding your game server via the web interface, set the Daemon IP/Hostname to hlx-daemon (not localhost) so that HLX:CE can properly reload/restart. After changes, reload or restart the daemon for them to take effect.
 
 ### Upgrading (docker)
 
@@ -135,44 +142,65 @@ Modern deployment uses the **Docker Compose V2** plugin. Use `docker compose` in
 
 **Accessing containers (Shell):**
 ```bash
+# Web container shell
 docker compose exec web bash
+
+# Daemon container shell
 docker compose exec daemon bash
+
+# Database container shell
 docker compose exec db bash
 ```
 **Manual script execution (inside the daemon):**
 ```bash
 # Generate daily awards
-docker compose exec daemon perl hlstats-awards.pl
+docker compose exec daemon su hlstats -c "perl /home/hlstats/scripts/hlstats-awards.pl"
 
 # Resolve player countries via GeoIP
-docker compose exec daemon perl hlstats-resolve.pl
+docker compose exec daemon su hlstats -c "perl /home/hlstats/scripts/hlstats-resolve.pl"
 ```
 **Database Backup & Restore:**
+
+Credentials are read from the .env file automatically if it exists; if not, default values are used.
 ```bash
-# Create a backup (Dump)
-docker compose exec db mariadb-dump -u hlstatsx -p hlstatsx_password hlstatsx > backup.sql
+# Create a backup (dump)
+docker compose exec db mariadb-dump -u ${DB_USER:-hlstatsx} -p${DB_PASS:-hlstatsx_password} ${DB_NAME:-hlstatsx} > backup.sql
 
 # Restore a backup
-docker compose exec -i db mariadb -u hlstatsx -p hlstatsx_password hlstatsx < backup.sql
+docker compose exec -i db mariadb -u ${DB_USER:-hlstatsx} -p${DB_PASS:-hlstatsx_password} ${DB_NAME:-hlstatsx} < backup.sql
 ```
 **Live Troubleshooting (Logs):**
 ```bash
 # Follow all logs
 docker compose logs -f
 
-# Check only the UDP Forwarder (incoming game server logs)
+# Web interface logs
+docker compose logs -f web
+
+# Daemon (Perl log parser) logs
+docker compose logs -f daemon
+
+# UDP Forwarder logs from game servers
 docker compose logs -f forwarder
+
+# MariaDB container logs
+docker compose logs -f db
 ```
 **System Management:**
 ```bash
-# Restart a specific service (e.g., after a config change)
-docker compose restart daemon
+# Restart services individually
+docker compose restart daemon web forwarder db
 
-# Stop and remove containers (keeps data)
+# Stop and remove containers (keeps volumes/data)
 docker compose down
 
 # FULL RESET: Remove everything (containers, networks, and ALL database data)
-docker compose down -v
+docker compose down -v --remove-orphans
+
+# Clean up unused Docker resources
+docker system prune -a -f
+docker volume prune -f
+docker network prune -f
 ```
 
 ## Troubleshooting & FAQ
@@ -182,10 +210,15 @@ A: This is normal during the first launch. The MariaDB container needs time to i
 
 ### Q: My game server logs are not appearing in the stats.
 A: Check the following:
-1. Ensure the `PROXY_KEY` in your `.env` matches the key in the **Web Admin Panel > HLStatsX Settings**.
-2. Verify that your game server is sending logs to the **Forwarder's UDP port** (default: `27501`).
-3. Check the forwarder logs: `docker compose logs -f forwarder`.
-
+1. **Proxy key:** Ensure the `PROXY_KEY` in your `.env` matches the key in **Web Admin Panel > HLStatsX Settings**.
+2. **Forwarder (CS2 only):** Counter-Strike 2 requires the Forwarder UDP port (`26999`) to be reachable. Other Source engine games can log directly to the daemon.
+3. **Daemon IP/Hostname:** When adding a game server in the web interface, set **Daemon IP/Hostname** to `hlx-daemon` (not `localhost`) to ensure the daemon reloads properly.
+4. **Forwarder logs (CS2):**
+```bash
+docker compose logs -f forwarder
+```
 ### Q: How do I change the web port from 80 to something else?
-A: In `docker-compose.yml`, change the `web` service's port mapping from `"80:80"` to e.g., `"8080:80"`.
-
+A: Set the `WEB_PORT` variable in your `.env` file (e.g., `WEB_PORT=81`) and then restart the stack:
+```bash
+docker compose up -d
+```

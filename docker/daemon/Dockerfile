@@ -20,10 +20,10 @@ RUN find /home/hlstats/scripts -type f \( -name "*.pl" -o -name "*.conf" -o -nam
     chown -R hlstats:hlstats /home/hlstats/scripts
 
 CMD cd /home/hlstats/scripts && \
-    sed -i "s/DBHost\s*\".*\"/DBHost \"hlx-db\"/" hlstats.conf && \
-    sed -i "s/DBUsername\s*\".*\"/DBUsername \"$DB_USER\"/" hlstats.conf && \
-    sed -i "s/DBPassword\s*\".*\"/DBPassword \"$DB_PASS\"/" hlstats.conf && \
-    sed -i "s/DBName\s*\".*\"/DBName \"$DB_NAME\"/" hlstats.conf && \
+    sed -i "s/^DBHost .*/DBHost \"hlx-db\"/" hlstats.conf && \
+    sed -i "s/^DBUsername .*/DBUsername \"$DB_USER\"/" hlstats.conf && \
+    sed -i "s/^DBPassword .*/DBPassword \"$DB_PASS\"/" hlstats.conf && \
+    sed -i "s/^DBName .*/DBName \"$DB_NAME\"/" hlstats.conf && \
     cron && \
     until nc -z hlx-db 3306; do echo "Waiting for DB..."; sleep 2; done; \
     su hlstats -c "perl hlstats.pl --port 27500"

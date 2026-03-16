@@ -1,6 +1,6 @@
 services:
   db:
-    image: mariadb:10.11
+    image: mariadb:11.4
     container_name: hlx-db
     restart: always
     environment:
@@ -11,8 +11,8 @@ services:
       HLX_PROXY_KEY: "${PROXY_KEY:-dummy_key}"
     volumes:
       - hlx-db-data:/var/lib/mysql
-      - ./src/sql/install.sql:/tmp/install.sql:ro
       - ./docker/db/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
+      - ./src/sql/install.sql:/tmp/install.sql:ro
 
   web:
     build:
@@ -28,6 +28,8 @@ services:
       DB_NAME: "${DB_NAME:-hlstatsx}"
       DB_USER: "${DB_USER:-hlstatsx}"
       DB_PASS: "${DB_PASS:-hlstatsx_password}"
+      DB_HOST: "hlx-db"
+      DAEMON_HOST: "hlx-daemon"
 
   daemon:
     build:
@@ -39,10 +41,12 @@ services:
       - db
     ports:
       - "${DAEMON_PORT:-27500}:27500/udp"
+      - "${DAEMON_PORT:-27500}:27500/tcp"
     environment:
       DB_NAME: "${DB_NAME:-hlstatsx}"
       DB_USER: "${DB_USER:-hlstatsx}"
       DB_PASS: "${DB_PASS:-hlstatsx_password}"
+      DB_HOST: "hlx-db"
       DAEMON_PORT: "27500"
 
   forwarder:
@@ -58,9 +62,10 @@ services:
       DAEMON_HOST: "${DAEMON_HOST:-hlx-daemon}"
       DAEMON_PORT: "27500"
     ports:
-      - "${FORWARDER_PORT:-27501}:${FORWARDER_PORT:-27501}/udp"
+      - "${FORWARDER_PORT:-26999}:${FORWARDER_PORT:-26999}/udp"
+      - "${FORWARDER_PORT:-26999}:${FORWARDER_PORT:-26999}/tcp"
     command: >
-      -listen-address :${FORWARDER_PORT:-27501}
+      -listen-address :${FORWARDER_PORT:-26999}
       -udp.forward-address ${DAEMON_HOST:-hlx-daemon}:27500
       -forward.proxy-key ${PROXY_KEY:-dummy_key}
       -forward.gameserver-ip ${GAME_SERVER_IP:-127.0.0.1}
