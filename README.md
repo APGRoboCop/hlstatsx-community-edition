@@ -103,7 +103,7 @@ URL: http://your-server-ip/ (or http://localhost/)
 Default Admin: admin
 Default Password: 123456
 ```
-Ensure no other service is using the same ports (default: web 80, daemon 27500, forwarder 26999).
+Ensure no other service is using the same ports (default: web 80, mariadb 3306, daemon 27500, forwarder 26999).
 
 ### Docker Compose
 
@@ -114,10 +114,11 @@ The stack is managed via a single `docker-compose.yml` file. Database initializa
 | **Web** | 80 | **80** | TCP | Web Interface (Admin: `admin` / `123456`) |
 | **Forwarder**| 26999 | **26999** | TCP/UDP | Connect your cs2 gameserver here (`+logaddress_add_http "http://your-server-ip:26999"`) |
 | **Daemon** | 27500 | **27500** | UDP | Internal log processor |
+| **Database** | 3306 | **3306** | TCP | MariaDB server |
 
 - **Automated Init:** The `install.sql` is automatically imported into the MariaDB container on the first run. 
 - **Dynamic Setup:** The `PROXY_KEY` from your `.env` file is automatically injected into the database and configuration files during startup.
-- **Port Conflict:** If port 80 is already in use on your host, change the mapping in your `.env` (e.g., `WEB_PORT=81`).
+- **Port Conflict:** If port 80 or 3306 etc is already in use on your host, change the mapping in your `.env` (e.g., `WEB_PORT=81`).
 
 Note: Forwarder is required only for Counter-Strike 2. For other Source engine games, direct daemon logging is sufficient.
 When adding your game server via the web interface, set the Daemon IP/Hostname to hlx-daemon (not localhost) so that HLX:CE can properly reload/restart. After changes, reload or restart the daemon for them to take effect.
@@ -160,15 +161,43 @@ docker compose exec daemon su hlstats -c "perl /home/hlstats/scripts/hlstats-awa
 docker compose exec daemon su hlstats -c "perl /home/hlstats/scripts/hlstats-resolve.pl"
 ```
 **Database Backup & Restore:**
-
 Credentials are read from the .env file automatically if it exists; if not, default values are used.
 ```bash
 # Create a backup (dump)
-docker compose exec db mariadb-dump -u ${DB_USER:-hlstatsx} -p${DB_PASS:-hlstatsx_password} ${DB_NAME:-hlstatsx} > backup.sql
+docker compose exec -T db mariadb-dump -u ${DB_USER:-hlstatsx} -p${DB_PASS:-hlstatsx_password} ${DB_NAME:-hlstatsx} > backup.sql
 
 # Restore a backup
-docker compose exec -i db mariadb -u ${DB_USER:-hlstatsx} -p${DB_PASS:-hlstatsx_password} ${DB_NAME:-hlstatsx} < backup.sql
+docker compose exec -T db mariadb -u ${DB_USER:-hlstatsx} -p${DB_PASS:-hlstatsx_password} ${DB_NAME:-hlstatsx} < backup.sql
 ```
+**External Database Access (for CS2 Plugins)**
+If you use external plugins (like CounterStrikeSharp, EloRank, or MatchZy) that require their own database or need to connect to HLStatsX, follow these steps.
+
+```bash
+#Create a new database:
+docker compose exec -T db mariadb -u root -p${DB_ROOT_PASS:-hlstats_root_pass} -e "CREATE DATABASE IF NOT EXISTS other_plugin_db;"
+
+#Grant access to the existing user:
+docker compose exec -T db mariadb -u root -p${DB_ROOT_PASS:-hlstats_root_pass} -e "GRANT ALL PRIVILEGES ON other_plugin_db.* TO '${DB_USER:-hlstatsx}'@'%';"
+
+#Populate the new database from an SQL file:
+docker compose exec -T db mariadb -u root -p${DB_ROOT_PASS:-hlstats_root_pass} other_plugin_db < your_plugin_data.sql
+
+#Delete (Drop) the database:
+docker compose exec -T db mariadb -u root -p${DB_ROOT_PASS:-hlstats_root_pass} -e "DROP DATABASE IF EXISTS other_plugin_db;"
+```
+#### Plugin Connection Details
+Use these settings in your plugin's configuration file (e.g., `config.json`). 
+Do not use variables here; type the actual values you defined in your `.env` file.
+
+| Setting | Value (Local Host) | Value (Remote Server) |
+| :--- | :--- | :--- |
+| **Database Host** | `127.0.0.1` | `Your_Server_Public_IP` |
+| **Database Port** | `3306` (or your `DB_PORT`) | `3306` |
+| **Database User** | `hlstatsx` (or your `DB_USER`) | `hlstatsx` |
+| **Database Password** | `Your secret DB_PASS` | `Your secret DB_PASS` |
+| **Database Name** | `other_plugin_db` | `other_plugin_db` |
+
+
 **Live Troubleshooting (Logs):**
 ```bash
 # Follow all logs

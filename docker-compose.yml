@@ -3,6 +3,8 @@ services:
     image: mariadb:11.4
     container_name: hlx-db
     restart: always
+    ports:
+      - "${DB_PORT:-3306}:3306"
     environment:
       MYSQL_ROOT_PASSWORD: "${DB_ROOT_PASS:-root_password}"
       MYSQL_DATABASE: "${DB_NAME:-hlstatsx}"
