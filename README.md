@@ -177,7 +177,12 @@ If you use external plugins (like CounterStrikeSharp, EloRank, or MatchZy) that 
 docker compose exec -T db mariadb -u root -p${DB_ROOT_PASS:-hlstats_root_pass} -e "CREATE DATABASE IF NOT EXISTS other_plugin_db;"
 
 #Grant access to the existing user:
-docker compose exec -T db mariadb -u root -p${DB_ROOT_PASS:-hlstats_root_pass} -e "GRANT ALL PRIVILEGES ON other_plugin_db.* TO '${DB_USER:-hlstatsx}'@'%';"
+docker compose exec -T db mariadb \
+  -u root \
+  -p"${DB_ROOT_PASS:-hlstats_root_pass}" \
+  -e "CREATE USER IF NOT EXISTS '${DB_USER:-hlstatsx}'@'%' IDENTIFIED BY '${DB_PASS:-hlstatsx_password}';
+      GRANT ALL PRIVILEGES ON ${DB_NAME:-hlstatsx}.* TO '${DB_USER:-hlstatsx}'@'%';
+      FLUSH PRIVILEGES;"
 
 #Populate the new database from an SQL file:
 docker compose exec -T db mariadb -u root -p${DB_ROOT_PASS:-hlstats_root_pass} other_plugin_db < your_plugin_data.sql

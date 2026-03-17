@@ -45,4 +45,5 @@ CMD sed -i "s/defineVar(\"DB_ADDR\", '[^']*');/defineVar(\"DB_ADDR\", 'hlx-db');
     sed -i "s/defineVar(\"DB_USER\", '[^']*');/defineVar(\"DB_USER\", '$DB_USER');/" /var/www/config.php && \
     sed -i "s/defineVar(\"DB_PASS\", '[^']*');/defineVar(\"DB_PASS\", '$DB_PASS');/" /var/www/config.php && \
     sed -i "s/defineVar(\"DB_NAME\", '[^']*');/defineVar(\"DB_NAME\", '$DB_NAME');/" /var/www/config.php && \
+    sed -i "s/name=\"masterserver\" value=\"[^\"]*\"/name=\"masterserver\" value=\"hlx-daemon\"/" /var/www/pages/admintasks/tools_perlcontrol.php && \
     apache2-foreground
