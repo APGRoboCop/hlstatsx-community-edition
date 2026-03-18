@@ -31,7 +31,7 @@ services:
       DB_USER: "${DB_USER:-hlstatsx}"
       DB_PASS: "${DB_PASS:-hlstatsx_password}"
       DB_HOST: "hlx-db"
-      DAEMON_HOST: "hlx-daemon"
+      DAEMON_HOST: "${DAEMON_HOST:-hlx-daemon}"
 
   daemon:
     build:
