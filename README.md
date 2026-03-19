@@ -164,31 +164,31 @@ docker compose exec daemon su hlstats -c "perl /home/hlstats/scripts/hlstats-res
 Credentials are read from the .env file automatically if it exists; if not, default values are used.
 ```bash
 # Create a backup (dump)
-docker compose exec -T db mariadb-dump -u ${DB_USER:-hlstatsx} -p${DB_PASS:-hlstatsx_password} ${DB_NAME:-hlstatsx} > backup.sql
+docker compose exec -T db mariadb-dump -u DB_USER -p"DB_PASS" DB_NAME > backup.sql
 
 # Restore a backup
-docker compose exec -T db mariadb -u ${DB_USER:-hlstatsx} -p${DB_PASS:-hlstatsx_password} ${DB_NAME:-hlstatsx} < backup.sql
+docker compose exec -T db mariadb -u DB_USER -p"DB_PASS" DB_NAME < backup.sql
 ```
 **External Database Access (for CS2 Plugins)**
 If you use external plugins (like CounterStrikeSharp, EloRank, or MatchZy) that require their own database or need to connect to HLStatsX, follow these steps.
 
 ```bash
 #Create a new database:
-docker compose exec -T db mariadb -u root -p${DB_ROOT_PASS:-hlstats_root_pass} -e "CREATE DATABASE IF NOT EXISTS other_plugin_db;"
+docker compose exec -T db mariadb -u root -p"DB_ROOT_PASS" -e "CREATE DATABASE IF NOT EXISTS other_plugin_db;"
 
 #Grant access to the existing user:
 docker compose exec -T db mariadb \
   -u root \
-  -p"${DB_ROOT_PASS:-hlstats_root_pass}" \
-  -e "CREATE USER IF NOT EXISTS '${DB_USER:-hlstatsx}'@'%' IDENTIFIED BY '${DB_PASS:-hlstatsx_password}';
-      GRANT ALL PRIVILEGES ON ${DB_NAME:-hlstatsx}.* TO '${DB_USER:-hlstatsx}'@'%';
+  -p"DB_ROOT_PASS" \
+  -e "CREATE USER IF NOT EXISTS 'DB_USER'@'%' IDENTIFIED BY 'DB_PASS';
+      GRANT ALL PRIVILEGES ON DB_NAME.* TO 'DB_USER'@'%';
       FLUSH PRIVILEGES;"
 
 #Populate the new database from an SQL file:
-docker compose exec -T db mariadb -u root -p${DB_ROOT_PASS:-hlstats_root_pass} other_plugin_db < your_plugin_data.sql
+docker compose exec -T db mariadb -u root -p"DB_ROOT_PASS" other_plugin_db < your_plugin_data.sql
 
 #Delete (Drop) the database:
-docker compose exec -T db mariadb -u root -p${DB_ROOT_PASS:-hlstats_root_pass} -e "DROP DATABASE IF EXISTS other_plugin_db;"
+docker compose exec -T db mariadb -u root -p"DB_ROOT_PASS" -e "DROP DATABASE IF EXISTS other_plugin_db;"
 ```
 #### Plugin Connection Details
 Use these settings in your plugin's configuration file (e.g., `config.json`). 
