@@ -26,7 +26,7 @@ public class ElorankConfig : BasePluginConfig
 public class Elorank_cs2 : BasePlugin, IPluginConfig<ElorankConfig>
 {
     public override string ModuleName => "[CS2] Elorank for HLstatsX";
-    public override string ModuleVersion => "1.2.1";
+    public override string ModuleVersion => "1.2.1-ag2recompile";
     public override string ModuleAuthor => "lovasatt";
     public override string ModuleDescription => "Allows players to set their Competitive rank in HLstatsX manually.";
 

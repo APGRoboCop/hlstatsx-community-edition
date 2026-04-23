@@ -26,7 +26,7 @@ public class HLStatsXConfig : BasePluginConfig
 public class HLStatsX_SuperLogs : BasePlugin, IPluginConfig<HLStatsXConfig>
 {
     public override string ModuleName => "HLStatsX:CE SuperLogs CS2";
-    public override string ModuleVersion => "2.1";
+    public override string ModuleVersion => "2.1-ag2recompile";
     public override string ModuleAuthor => "lovasatt";
 
     public HLStatsXConfig Config { get; set; } = new HLStatsXConfig();

@@ -11,7 +11,7 @@ namespace HLStatsX_WarmupControl;
 public class HLStatsX_WarmupControl : BasePlugin
 {
     public override string ModuleName => "HLStatsX:CE Warmup Log Control";
-    public override string ModuleVersion => "1.0";
+    public override string ModuleVersion => "1.0-ag2recompile";
     public override string ModuleAuthor => "lovasatt";
 
     // Debug configuration (Set to false for production)

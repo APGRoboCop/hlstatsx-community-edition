@@ -47,7 +47,7 @@ public class HLXSession
 public class HLStatsX_CS2 : BasePlugin, IPluginConfig<HLXConfig>
 {
     public override string ModuleName => "HLStatsX Modern Interface";
-    public override string ModuleVersion => "1.0";
+    public override string ModuleVersion => "1.0-ag2recompile";
     public override string ModuleAuthor => "lovasatt";
     public override string ModuleDescription => "Integrates HLStatsX with CS2 for viewing and updating player stats via in-game menu.";
 
