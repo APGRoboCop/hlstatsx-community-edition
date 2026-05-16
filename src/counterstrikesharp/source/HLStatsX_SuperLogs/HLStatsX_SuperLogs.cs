@@ -26,7 +26,7 @@ public class HLStatsXConfig : BasePluginConfig
 public class HLStatsX_SuperLogs : BasePlugin, IPluginConfig<HLStatsXConfig>
 {
     public override string ModuleName => "HLStatsX:CE SuperLogs CS2";
-    public override string ModuleVersion => "2.1-ag2recompile";
+    public override string ModuleVersion => "2.2";
     public override string ModuleAuthor => "lovasatt";
 
     public HLStatsXConfig Config { get; set; } = new HLStatsXConfig();
@@ -98,6 +98,11 @@ public class HLStatsX_SuperLogs : BasePlugin, IPluginConfig<HLStatsXConfig>
         if (weapon.Contains("incgrenade") || weapon.Contains("molotov") || weapon == "inferno")
         {
             return (player?.TeamNum == 3) ? "firebomb" : "inferno";
+        }
+
+        if (weapon == "knife")
+        {
+            return (player?.TeamNum == 3) ? "knife" : "knife_t";
         }
 
         if (player != null && player.IsValid && player.PlayerPawn.Value != null)

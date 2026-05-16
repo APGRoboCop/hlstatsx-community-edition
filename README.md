@@ -19,7 +19,8 @@ Counter-Strike 2 is supported, via [`source-udp-forwarder`](https://github.com/s
 
 | Date | Description / Feature | Support Status / Additional Information |
 | :--- | :--- | :--- |
-| **2026-04-23** | **v1.12.3 - AG2 & Hitgroup Fix** | **Critical update for CS2 AnimGraph 2 engine changes. Restores precise hitgroup logging and stability.** |
+| 2026-05-16 | **CS2 Knife fix (T/CT differentiation)** | **Correctly logs basic knife as `knife_t` for Terrorists and `knife` for CTs; resolves inaccurate kill stats in SuperLogs** |
+| 2026-04-23 | v1.12.3 - AG2 & Hitgroup Fix | Critical update for CS2 AnimGraph 2 engine changes. Restores precise hitgroup logging and stability. |
 | 2026-03-14 | Modern Docker Stack | PHP 8.4, Debian 13, Automated DB init & CI verification. 🚀 |
 | 2026-02-15 | Modern In-Game Interface | Integrates HLStatsX with Counter-Strike 2 using rich HTML dashboards for rankings, weapon stats, and player management. The in-game menus can be accessed with !mm (EloRank) and !hlx (HLStatsX). |
 | 2026-01-28 | Unified Weapon System | Full-Stack Hitgroup & Loadout Refactor for Source 2 🎯 |
