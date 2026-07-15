@@ -26,7 +26,7 @@ public class ElorankConfig : BasePluginConfig
 public class Elorank_cs2 : BasePlugin, IPluginConfig<ElorankConfig>
 {
     public override string ModuleName => "[CS2] Elorank for HLstatsX";
-    public override string ModuleVersion => "1.2.1-ag2recompile";
+    public override string ModuleVersion => "1.3";
     public override string ModuleAuthor => "lovasatt";
     public override string ModuleDescription => "Allows players to set their Competitive rank in HLstatsX manually.";
 
@@ -64,39 +64,46 @@ public class Elorank_cs2 : BasePlugin, IPluginConfig<ElorankConfig>
                 player.PrintToChat(Localizer["error.cooldown", remaining]);
                 return;
             }
+            _lastCommandUsage.TryRemove(player.SteamID, out _);
         }
 
         var menu = new ChatMenu(Localizer["menu.title"]);
 
-        menu.AddMenuOption("No Rank", (p, opt) => SetRank(p, 0, "No Rank"));
-        menu.AddMenuOption("Silver I", (p, opt) => SetRank(p, 1, "Silver I"));
-        menu.AddMenuOption("Silver II", (p, opt) => SetRank(p, 2, "Silver II"));
-        menu.AddMenuOption("Silver III", (p, opt) => SetRank(p, 3, "Silver III"));
-        menu.AddMenuOption("Silver IV", (p, opt) => SetRank(p, 4, "Silver IV"));
-        menu.AddMenuOption("Silver Elite", (p, opt) => SetRank(p, 5, "Silver Elite"));
-        menu.AddMenuOption("Silver Elite Master", (p, opt) => SetRank(p, 6, "Silver Elite Master"));
-        menu.AddMenuOption("Gold Nova I", (p, opt) => SetRank(p, 7, "Gold Nova I"));
-        menu.AddMenuOption("Gold Nova II", (p, opt) => SetRank(p, 8, "Gold Nova II"));
-        menu.AddMenuOption("Gold Nova III", (p, opt) => SetRank(p, 9, "Gold Nova III"));
-        menu.AddMenuOption("Gold Nova Master", (p, opt) => SetRank(p, 10, "Gold Nova Master"));
-        menu.AddMenuOption("Master Guardian I", (p, opt) => SetRank(p, 11, "Master Guardian I"));
-        menu.AddMenuOption("Master Guardian II", (p, opt) => SetRank(p, 12, "Master Guardian II"));
-        menu.AddMenuOption("Master Guardian Elite", (p, opt) => SetRank(p, 13, "Master Guardian Elite"));
-        menu.AddMenuOption("Distinguished Master Guardian", (p, opt) => SetRank(p, 14, "DMG"));
-        menu.AddMenuOption("Legendary Eagle", (p, opt) => SetRank(p, 15, "Legendary Eagle"));
-        menu.AddMenuOption("Legendary Eagle Master", (p, opt) => SetRank(p, 16, "LEM"));
-        menu.AddMenuOption("Supreme Master First Class", (p, opt) => SetRank(p, 17, "Supreme"));
-        menu.AddMenuOption("The Global Elite", (p, opt) => SetRank(p, 18, "Global Elite"));
+        menu.AddMenuOption("No Rank", (p, opt) => SelectRank(p, 0, "No Rank"));
+        menu.AddMenuOption("Silver I", (p, opt) => SelectRank(p, 1, "Silver I"));
+        menu.AddMenuOption("Silver II", (p, opt) => SelectRank(p, 2, "Silver II"));
+        menu.AddMenuOption("Silver III", (p, opt) => SelectRank(p, 3, "Silver III"));
+        menu.AddMenuOption("Silver IV", (p, opt) => SelectRank(p, 4, "Silver IV"));
+        menu.AddMenuOption("Silver Elite", (p, opt) => SelectRank(p, 5, "Silver Elite"));
+        menu.AddMenuOption("Silver Elite Master", (p, opt) => SelectRank(p, 6, "Silver Elite Master"));
+        menu.AddMenuOption("Gold Nova I", (p, opt) => SelectRank(p, 7, "Gold Nova I"));
+        menu.AddMenuOption("Gold Nova II", (p, opt) => SelectRank(p, 8, "Gold Nova II"));
+        menu.AddMenuOption("Gold Nova III", (p, opt) => SelectRank(p, 9, "Gold Nova III"));
+        menu.AddMenuOption("Gold Nova Master", (p, opt) => SelectRank(p, 10, "Gold Nova Master"));
+        menu.AddMenuOption("Master Guardian I", (p, opt) => SelectRank(p, 11, "Master Guardian I"));
+        menu.AddMenuOption("Master Guardian II", (p, opt) => SelectRank(p, 12, "Master Guardian II"));
+        menu.AddMenuOption("Master Guardian Elite", (p, opt) => SelectRank(p, 13, "Master Guardian Elite"));
+        menu.AddMenuOption("Distinguished Master Guardian", (p, opt) => SelectRank(p, 14, "DMG"));
+        menu.AddMenuOption("Legendary Eagle", (p, opt) => SelectRank(p, 15, "Legendary Eagle"));
+        menu.AddMenuOption("Legendary Eagle Master", (p, opt) => SelectRank(p, 16, "LEM"));
+        menu.AddMenuOption("Supreme Master First Class", (p, opt) => SelectRank(p, 17, "Supreme"));
+        menu.AddMenuOption("The Global Elite", (p, opt) => SelectRank(p, 18, "Global Elite"));
 
         MenuManager.OpenChatMenu(player, menu);
-        _lastCommandUsage.AddOrUpdate(player.SteamID, DateTime.Now, (key, oldValue) => DateTime.Now);
+    }
+    
+    private void SelectRank(CCSPlayerController player, int rankId, string rankName)
+    {
+        if (player == null || !player.IsValid)
+            return;
+        MenuManager.CloseActiveMenu(player);
+        _lastCommandUsage[player.SteamID] = DateTime.Now;
+        SetRank(player.Slot, player.SteamID, rankId, rankName);
     }
 
-    private void SetRank(CCSPlayerController player, int rankId, string rankName)
+    private void SetRank(int slot, ulong steamId, int rankId, string rankName)
     {
-        if (player == null || !player.IsValid) return;
-
-        string uniqueId = GetSteam2ID(player.SteamID);
+        string uniqueId = GetSteam2ID(steamId);
 
         // Async database operation
         Task.Run(async () =>
@@ -131,16 +138,17 @@ public class Elorank_cs2 : BasePlugin, IPluginConfig<ElorankConfig>
                 // Return to the main thread
                 Server.NextFrame(() =>
                 {
-                    if (player.IsValid)
+                    var targetPlayer = Utilities.GetPlayerFromSlot(slot);
+                    if (targetPlayer != null && targetPlayer.IsValid && targetPlayer.SteamID == steamId)
                     {
                         if (rowsAffected > 0)
                         {
-                            player.PrintToChat(Localizer["rank.set.success", rankName]);
+                            targetPlayer.PrintToChat(Localizer["rank.set.success", rankName]);
                         }
                         else
                         {
-                            player.PrintToChat(Localizer["error.profile.not.found"]);
-                            player.PrintToChat(Localizer["error.wait.for.stats"]);
+                            targetPlayer.PrintToChat(Localizer["error.profile.not.found"]);
+                            targetPlayer.PrintToChat(Localizer["error.wait.for.stats"]);
                         }
                     }
                 });

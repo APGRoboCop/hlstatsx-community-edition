@@ -47,13 +47,13 @@ public class HLXSession
 public class HLStatsX_CS2 : BasePlugin, IPluginConfig<HLXConfig>
 {
     public override string ModuleName => "HLStatsX Modern Interface";
-    public override string ModuleVersion => "1.0-ag2recompile";
+    public override string ModuleVersion => "1.1";
     public override string ModuleAuthor => "lovasatt";
     public override string ModuleDescription => "Integrates HLStatsX with CS2 for viewing and updating player stats via in-game menu.";
 
     public HLXConfig Config { get; set; } = new();
     private readonly ConcurrentDictionary<int, HLXSession> _activeSessions = new();
-    private readonly ConcurrentDictionary<ulong, string> _waitingForInput = new();
+    private readonly ConcurrentDictionary<ulong, (string Field, DateTime Time)> _waitingForInput = new();
     private readonly ConcurrentDictionary<ulong, DateTime> _lastInputUsage = new();
 
     public void OnConfigParsed(HLXConfig config) => Config = config;
@@ -70,12 +70,39 @@ public class HLStatsX_CS2 : BasePlugin, IPluginConfig<HLXConfig>
                     var p = Utilities.GetPlayerFromSlot(slot);
                     if ((now - session.LastActivity).TotalSeconds > 30)
                     {
-                        if (p != null) _waitingForInput.TryRemove(p.SteamID, out _);
-                        if (p != null && p.IsValid) MenuManager.CloseActiveMenu(p);
+                        if (p != null)
+                        {
+                            _waitingForInput.TryRemove(p.SteamID, out _);
+                            _lastInputUsage.TryRemove(p.SteamID, out _);
+                            if (p.IsValid)
+                                MenuManager.CloseActiveMenu(p);
+                        }
                         _activeSessions.TryRemove(slot, out _);
                     }
                 }
             }
+
+            foreach (var input in _waitingForInput.ToList())
+            {
+                if ((now - input.Value.Time).TotalSeconds > 30)
+                {
+                    _waitingForInput.TryRemove(input.Key, out _);
+                    _lastInputUsage.TryRemove(input.Key, out _);
+
+                    foreach (var p in Utilities.GetPlayers())
+                    {
+                        if (p.SteamID == input.Key)
+                        {
+                            if (p.IsValid)
+                            {
+                                p.PrintToChat(Localizer["status.timeout"]);
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+
         }, TimerFlags.REPEAT);
 
         AddCommandListener("say", OnPlayerSay);
@@ -83,10 +110,6 @@ public class HLStatsX_CS2 : BasePlugin, IPluginConfig<HLXConfig>
 
         RegisterEventHandler<EventRoundStart>((@e, @i) =>
         {
-            foreach (var p in Utilities.GetPlayers())
-            {
-                _waitingForInput.TryRemove(p.SteamID, out _);
-            }
             return HookResult.Continue;
         });
 
@@ -96,6 +119,18 @@ public class HLStatsX_CS2 : BasePlugin, IPluginConfig<HLXConfig>
             {
                 _activeSessions.TryRemove(@e.Userid.Slot, out _);
                 _waitingForInput.TryRemove(@e.Userid.SteamID, out _);
+                _lastInputUsage.TryRemove(@e.Userid.SteamID, out _);
+            }
+            return HookResult.Continue;
+        });
+
+        RegisterEventHandler<EventPlayerConnectFull>((@e, @i) =>
+        {
+            if (@e.Userid != null)
+            {
+                _activeSessions.TryRemove(@e.Userid.Slot, out _);
+                _waitingForInput.TryRemove(@e.Userid.SteamID, out _);
+                _lastInputUsage.TryRemove(@e.Userid.SteamID, out _);
             }
             return HookResult.Continue;
         });
@@ -154,7 +189,7 @@ public class HLStatsX_CS2 : BasePlugin, IPluginConfig<HLXConfig>
     private HookResult OnPlayerSay(CCSPlayerController? player, CommandInfo info)
     {
         if (player == null || !player.IsValid) return HookResult.Continue;
-        if (_waitingForInput.TryGetValue(player.SteamID, out var field))
+        if (_waitingForInput.TryGetValue(player.SteamID, out var input))
         {
             RefreshActivity(player);
             if (_lastInputUsage.TryGetValue(player.SteamID, out var lastUsed))
@@ -187,7 +222,7 @@ public class HLStatsX_CS2 : BasePlugin, IPluginConfig<HLXConfig>
                 return HookResult.Handled;
             }
 
-            if (field == "fullName")
+            if (input.Field == "fullName")
             {
                 text = SanitizeText(text, 100);
 
@@ -199,7 +234,7 @@ public class HLStatsX_CS2 : BasePlugin, IPluginConfig<HLXConfig>
                     return HookResult.Handled;
                 }
             }
-            if (field == "email")
+            if (input.Field == "email")
             {
                 text = text.Trim();
 
@@ -214,7 +249,7 @@ public class HLStatsX_CS2 : BasePlugin, IPluginConfig<HLXConfig>
                 if (text.Length > 64)
                     text = text[..64];
             }
-            if (field == "homepage")
+            if (input.Field == "homepage")
             {
                 if (!IsValidHomepage(text, out var cleanUrl))
                 {
@@ -228,7 +263,7 @@ public class HLStatsX_CS2 : BasePlugin, IPluginConfig<HLXConfig>
                 if (text.Length > 64)
                     text = text[..64];
             }
-            _ = UpdateDbField(0, field, text, player);
+            _ = UpdateDbField(0, input.Field, text, player.Slot);
             _waitingForInput.TryRemove(player.SteamID, out _);
             _lastInputUsage[player.SteamID] = DateTime.Now;
             return HookResult.Handled;
@@ -265,9 +300,9 @@ public class HLStatsX_CS2 : BasePlugin, IPluginConfig<HLXConfig>
 
         var menu = new CenterHtmlMenu(title, this);
 
-        menu.AddMenuOption(Localizer["menu.hof"], (p, opt) => { RefreshActivity(p); _ = ShowTop10(p); });
-        menu.AddMenuOption(Localizer["menu.weapons"], (p, opt) => { RefreshActivity(p); _ = ShowTopWeapons(p); });
-        menu.AddMenuOption(Localizer["menu.victims"], (p, opt) => { RefreshActivity(p); _ = ShowTopVictims(p); });
+        menu.AddMenuOption(Localizer["menu.hof"], (p, opt) => { RefreshActivity(p); _ = ShowTop10(p.Slot); });
+        menu.AddMenuOption(Localizer["menu.weapons"], (p, opt) => { RefreshActivity(p); _ = ShowTopWeapons(p.Slot); });
+        menu.AddMenuOption(Localizer["menu.victims"], (p, opt) => { RefreshActivity(p); _ = ShowTopVictims(p.Slot); });
         string editLabelWithLine = Localizer["menu.edit_profile"] + "<br/><font color='white'>___________________________________</font>";
         menu.AddMenuOption(editLabelWithLine, (p, opt) => { RefreshActivity(p); ShowEditProfileMenu(p); });
         menu.AddMenuOption(Localizer["menu.back"], (p, opt) => { RefreshActivity(p); BuildAndOpenMainMenu(p); });
@@ -280,8 +315,8 @@ public class HLStatsX_CS2 : BasePlugin, IPluginConfig<HLXConfig>
         RefreshActivity(player);
         var menu = new CenterHtmlMenu(Localizer["edit.title"], this);
 
-        menu.AddMenuOption(Localizer["edit.name"], (p, opt) => { RefreshActivity(p); _waitingForInput[p.SteamID] = "fullName"; p.PrintToChat(Localizer["chat.prompt.name"]); MenuManager.CloseActiveMenu(p); });
-        menu.AddMenuOption(Localizer["edit.email"], (p, opt) => { RefreshActivity(p); _waitingForInput[p.SteamID] = "email"; p.PrintToChat(Localizer["chat.prompt.email"]); MenuManager.CloseActiveMenu(p); });
+        menu.AddMenuOption(Localizer["edit.name"], (p, opt) => { RefreshActivity(p); _waitingForInput[p.SteamID] = ("fullName", DateTime.Now); p.PrintToChat(Localizer["chat.prompt.name"]); MenuManager.CloseActiveMenu(p); });
+        menu.AddMenuOption(Localizer["edit.email"], (p, opt) => { RefreshActivity(p); _waitingForInput[p.SteamID] = ("email", DateTime.Now); p.PrintToChat(Localizer["chat.prompt.email"]); MenuManager.CloseActiveMenu(p); });
             string hideRankingLabel = session.IsHidden == 1
                 ? Localizer["menu.hideranking.off"]
                 : Localizer["menu.hideranking.on"];
@@ -290,11 +325,11 @@ public class HLStatsX_CS2 : BasePlugin, IPluginConfig<HLXConfig>
                 RefreshActivity(p);
                 int newValue = session.IsHidden == 1 ? 0 : 1;
                 session.IsHidden = newValue;
-                _ = UpdateDbField(0, "hideranking", newValue, p);
+                _ = UpdateDbField(0, "hideranking", newValue, p.Slot);
             });
 
         string homepageWithLine = Localizer["edit.homepage"] + "<br/><font color='white'>___________________________________</font>";
-        menu.AddMenuOption(homepageWithLine, (p, opt) => { RefreshActivity(p); _waitingForInput[p.SteamID] = "homepage"; p.PrintToChat(Localizer["chat.prompt.homepage"]); MenuManager.CloseActiveMenu(p); });
+        menu.AddMenuOption(homepageWithLine, (p, opt) => { RefreshActivity(p); _waitingForInput[p.SteamID] = ("homepage", DateTime.Now); p.PrintToChat(Localizer["chat.prompt.homepage"]); MenuManager.CloseActiveMenu(p); });
         menu.AddMenuOption(Localizer["menu.back"], (p, opt) => { RefreshActivity(p); BuildAndOpenMainMenu(p); });
         MenuManager.OpenCenterHtmlMenu(this, player, menu);
     }
@@ -396,7 +431,7 @@ public class HLStatsX_CS2 : BasePlugin, IPluginConfig<HLXConfig>
         MenuManager.OpenCenterHtmlMenu(this, player, menu);
     }
 
-    private async Task ShowTop10(CCSPlayerController player)
+    private async Task ShowTop10(int slot)
     {
         var topList = new List<string>();
         try
@@ -410,16 +445,21 @@ public class HLStatsX_CS2 : BasePlugin, IPluginConfig<HLXConfig>
         catch (Exception ex)
         {
             Console.WriteLine($"[HLStatsX_CS2] Error: {ex.Message}");
-            if (player != null && player.IsValid)
+            if (slot != -1)
             {
-                Server.NextFrame(() => player.PrintToChat("An error occurred, please try again!"));
+                Server.NextFrame(() => {
+                    var targetPlayer = Utilities.GetPlayerFromSlot(slot);
+                    if (targetPlayer != null && targetPlayer.IsValid)
+                        targetPlayer.PrintToChat("An error occurred, please try again!");
+                });
             }
             return;
         }
 
         Server.NextFrame(() =>
         {
-            if (player == null || !player.IsValid) return;
+            var targetPlayer = Utilities.GetPlayerFromSlot(slot);
+            if (targetPlayer == null || !targetPlayer.IsValid) return;
             var formattedList = new List<string>();
             for (int i = 0; i < topList.Count; i++)
             {
@@ -427,13 +467,13 @@ public class HLStatsX_CS2 : BasePlugin, IPluginConfig<HLXConfig>
                 string color = i == 0 ? "gold" : i == 1 ? "silver" : i == 2 ? "orange" : "white";
                 formattedList.Add($"<font color='{color}'>{i + 1}. {Escape(Trunc(p[0], 18))} - {p[1]}</font>");
             }
-            OpenPagedListMenu(player, Localizer["hof.title"], formattedList, 0, (pl) => BuildAndOpenActionsMenu(pl));
+            OpenPagedListMenu(targetPlayer, Localizer["hof.title"], formattedList, 0, (pl) => BuildAndOpenActionsMenu(pl));
         });
     }
 
-    private async Task ShowTopWeapons(CCSPlayerController player)
+    private async Task ShowTopWeapons(int slot)
     {
-        if (!_activeSessions.TryGetValue(player.Slot, out var session)) return;
+        if (!_activeSessions.TryGetValue(slot, out var session)) return;
         var weapons = new List<string>();
         try
         {
@@ -453,16 +493,21 @@ public class HLStatsX_CS2 : BasePlugin, IPluginConfig<HLXConfig>
         catch (Exception ex)
         {
             Console.WriteLine($"[HLStatsX_CS2] Error: {ex.Message}");
-            if (player != null && player.IsValid)
+            if (slot != -1)
             {
-                Server.NextFrame(() => player.PrintToChat("An error occurred, please try again!"));
+                Server.NextFrame(() => {
+                    var targetPlayer = Utilities.GetPlayerFromSlot(slot);
+                    if (targetPlayer != null && targetPlayer.IsValid)
+                        targetPlayer.PrintToChat("An error occurred, please try again!");
+                });
             }
             return;
         }
 
         Server.NextFrame(() =>
         {
-            if (player == null || !player.IsValid) return;
+            var targetPlayer = Utilities.GetPlayerFromSlot(slot);
+            if (targetPlayer == null || !targetPlayer.IsValid) return;
 
             var formattedList = new List<string>();
             for (int i = 0; i < weapons.Count; i++)
@@ -471,13 +516,13 @@ public class HLStatsX_CS2 : BasePlugin, IPluginConfig<HLXConfig>
                 formattedList.Add($"{i + 1}. {Escape(Trunc(p[0].ToUpper(), 18))} - {p[1]}");
             }
 
-            OpenPagedListMenu(player, Localizer["weapons.title"], formattedList, 0, (pl) => BuildAndOpenActionsMenu(pl));
+            OpenPagedListMenu(targetPlayer, Localizer["weapons.title"], formattedList, 0, (pl) => BuildAndOpenActionsMenu(pl));
         });
     }
 
-    private async Task ShowTopVictims(CCSPlayerController player)
+    private async Task ShowTopVictims(int slot)
     {
-        if (!_activeSessions.TryGetValue(player.Slot, out var session)) return;
+        if (!_activeSessions.TryGetValue(slot, out var session)) return;
         var victims = new List<string>();
         try
         {
@@ -498,16 +543,21 @@ public class HLStatsX_CS2 : BasePlugin, IPluginConfig<HLXConfig>
         catch (Exception ex)
         {
             Console.WriteLine($"[HLStatsX_CS2] Error: {ex.Message}");
-            if (player != null && player.IsValid)
+            if (slot != -1)
             {
-                Server.NextFrame(() => player.PrintToChat("An error occurred, please try again!"));
+                Server.NextFrame(() => {
+                    var targetPlayer = Utilities.GetPlayerFromSlot(slot);
+                    if (targetPlayer != null && targetPlayer.IsValid)
+                        targetPlayer.PrintToChat("An error occurred, please try again!");
+                });
             }
             return;
         }
 
         Server.NextFrame(() =>
         {
-            if (player == null || !player.IsValid) return;
+            var targetPlayer = Utilities.GetPlayerFromSlot(slot);
+            if (targetPlayer == null || !targetPlayer.IsValid) return;
 
             var formattedList = new List<string>();
             for (int i = 0; i < victims.Count; i++)
@@ -515,11 +565,11 @@ public class HLStatsX_CS2 : BasePlugin, IPluginConfig<HLXConfig>
                 var p = victims[i].Split('|');
                 formattedList.Add($"{i + 1}. {Escape(Trunc(p[0], 18))} - {p[1]}");
             }
-            OpenPagedListMenu(player, Localizer["victims.title"], formattedList, 0, (pl) => BuildAndOpenActionsMenu(pl));
+            OpenPagedListMenu(targetPlayer, Localizer["victims.title"], formattedList, 0, (pl) => BuildAndOpenActionsMenu(pl));
         });
     }
 
-    private async Task UpdateDbField(uint pId, string field, object val, CCSPlayerController? p = null)
+    private async Task UpdateDbField(uint pId, string field, object val, int slot = -1)
     {
         try
         {
@@ -527,7 +577,7 @@ public class HLStatsX_CS2 : BasePlugin, IPluginConfig<HLXConfig>
             using var conn = new MySqlConnection(GetConnString());
             await conn.OpenAsync();
             uint targetId = pId;
-            if (p != null && _activeSessions.TryGetValue(p.Slot, out var session)) targetId = session.PlayerId;
+            if (slot != -1 && _activeSessions.TryGetValue(slot, out var session)) targetId = session.PlayerId;
 
             string sql = field switch
             {
@@ -576,14 +626,15 @@ public class HLStatsX_CS2 : BasePlugin, IPluginConfig<HLXConfig>
 
             await cmd.ExecuteNonQueryAsync();
 
-            if (p != null)
+            if (slot != -1)
             {
                 Server.NextFrame(() =>
                 {
-                    if (p.IsValid)
+                    var targetPlayer = Utilities.GetPlayerFromSlot(slot);
+                    if (targetPlayer != null && targetPlayer.IsValid)
                     {
-                        p.PrintToChat(Localizer["status.updated", displayValue]);
-                        ShowEditProfileMenu(p);
+                        targetPlayer.PrintToChat(Localizer["status.updated", displayValue]);
+                        Server.NextFrame(() => ShowEditProfileMenu(targetPlayer));
                     }
                 });
             }
@@ -591,9 +642,14 @@ public class HLStatsX_CS2 : BasePlugin, IPluginConfig<HLXConfig>
         catch (Exception ex)
         {
             Console.WriteLine($"[HLStatsX_CS2] Update error: {ex.Message}");
-            if (p != null && p.IsValid)
+            if (slot != -1)
             {
-                Server.NextFrame(() => p.PrintToChat("An error occurred, please try again!"));
+                Server.NextFrame(() =>
+                {
+                    var targetPlayer = Utilities.GetPlayerFromSlot(slot);
+                    if (targetPlayer != null && targetPlayer.IsValid)
+                        targetPlayer.PrintToChat("An error occurred, please try again!");
+                });
             }
         }
     }
@@ -641,8 +697,13 @@ public class HLStatsX_CS2 : BasePlugin, IPluginConfig<HLXConfig>
 
         string host = uri.Host.ToLowerInvariant();
 
-        if (host == "localhost")
+        if (host == "localhost" ||
+            host.EndsWith(".local") ||
+            host.EndsWith(".lan") ||
+            host.EndsWith(".home"))
+        {
             return false;
+        }
 
         if (IPAddress.TryParse(host, out var ip))
         {
@@ -688,7 +749,7 @@ public class HLStatsX_CS2 : BasePlugin, IPluginConfig<HLXConfig>
         return true;
     }
 
-    private string GetConnString() => $"Server={Config.DatabaseHost};Port={Config.DatabasePort};User ID={Config.DatabaseUser};Password={Config.DatabasePassword};Database={Config.DatabaseName};SslMode=None;";
+    private string GetConnString() => $"Server={Config.DatabaseHost};Port={Config.DatabasePort};User ID={Config.DatabaseUser};Password={Config.DatabasePassword};Database={Config.DatabaseName};SslMode=Preferred;Pooling=true;MaximumPoolSize=20;";
     private string Trunc(string s, int l) => s.Length > l ? s[..(l - 2)] + ".." : s;
     private void RefreshActivity(CCSPlayerController player) { if (_activeSessions.TryGetValue(player.Slot, out var s)) s.LastActivity = DateTime.Now; }
     private string Escape(string s) => System.Net.WebUtility.HtmlEncode(s);

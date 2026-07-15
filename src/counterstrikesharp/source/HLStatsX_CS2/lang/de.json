@@ -2,6 +2,7 @@
   "status.sync": "<font color='gray'>Synchronisiere...</font>",
   "status.canceled": " \u0007[HLX]\u0001 Bearbeitung abgebrochen.",
   "status.updated": " \u0007[HLX]\u0001 Daten aktualisiert: \u0004{0}",
+  "status.timeout": " \u0007[HLX]\u0001 Sitzung zur Profilbearbeitung abgelaufen.",
   "menu.title": "<font color='red'>HLstatsX</font> - {0}",
   "menu.rank": "\u2654 Rang: #{0} ({1})",
   "menu.skill": "\u2605 Skill: {0} {1}",

@@ -11,7 +11,7 @@ namespace HLStatsX_WarmupControl;
 public class HLStatsX_WarmupControl : BasePlugin
 {
     public override string ModuleName => "HLStatsX:CE Warmup Log Control";
-    public override string ModuleVersion => "1.0-ag2recompile";
+    public override string ModuleVersion => "1.1";
     public override string ModuleAuthor => "lovasatt";
 
     // Debug configuration (Set to false for production)
@@ -25,8 +25,12 @@ public class HLStatsX_WarmupControl : BasePlugin
         // Monitor round start (Runs on Warmup start AND Live match start)
         RegisterEventHandler<EventRoundStart>(OnRoundStart);
 
-        if (_debug) Console.WriteLine("[HLStatsX-Warmup] Plugin loaded successfully.");
-    }
+        if (hotReload)
+        {
+            CheckStatusAndSetLog();
+        }
+
+        if (_debug) Console.WriteLine("[HLStatsX-Warmup] Plugin loaded successfully.");    }
 
     // --- EVENTS ---
 

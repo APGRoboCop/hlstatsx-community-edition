@@ -2,6 +2,7 @@
   "status.sync": "<font color='gray'>Синхронізація...</font>",
   "status.canceled": " \u0007[HLX]\u0001 Редагування скасовано.",
   "status.updated": " \u0007[HLX]\u0001 Дані оновлено: \u0004{0}",
+  "status.timeout": " \u0007[HLX]\u0001 Час сесії редагування проfiлю закінчився.",
   "menu.title": "<font color='red'>HLstatsX</font> - {0}",
   "menu.rank": "\u2654 Ранг: #{0} ({1})",
   "menu.skill": "\u2605 Скіл: {0} {1}",

@@ -2,6 +2,7 @@
   "status.sync": "<font color='gray'>Szinkronizálás...</font>",
   "status.canceled": " \u0007[HLX]\u0001 Szerkesztés megszakítva.",
   "status.updated": " \u0007[HLX]\u0001 Adat frissítve: \u0004{0}",
+  "status.timeout": " \u0007[HLX]\u0001 A profilmódosítási munkamenet ideje lejárt.",
   "menu.title": "<font color='red'>HLstatsX</font> - {0}",
   "menu.rank": "\u2654 Helyezés: #{0} ({1})",
   "menu.skill": "\u2605 Pontszám: {0} {1}",

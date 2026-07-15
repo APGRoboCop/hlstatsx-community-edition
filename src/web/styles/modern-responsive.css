@@ -1,6 +1,6 @@
 /*
    HLstatsX Modernized Edition - Responsive Adapter Layer
-   Version: 1.1
+   Version: 1.2
    Project: https://github.com/lovasatt/hlstatsx-community-edition
    Author:  lovasatt (2026)
 */
@@ -319,6 +319,13 @@
             --selection-bg: #1f6fff;
             --shadow-indicator: rgba(255,255,255,0.05);
             --touch-height: 44px;
+        }
+
+        /* --- CHARTS: INVERT CONTENT ONLY --- */
+        img[src*="show_graph.php"] {
+            filter: invert(0.83) hue-rotate(180deg) brightness(1.1) contrast(1.2) saturate(0.95) !important;
+            background-color: transparent !important;
+            border: 1px solid var(--border-soft) !important;
         }
 
         html, body {

@@ -2,6 +2,7 @@
   "status.sync": "<font color='gray'>Senkronize ediliyor...</font>",
   "status.canceled": " \u0007[HLX]\u0001 Düzenleme iptal edildi.",
   "status.updated": " \u0007[HLX]\u0001 Veri güncellendi: \u0004{0}",
+  "status.timeout": " \u0007[HLX]\u0001 Profil düzenleme oturumunun süresi doldu.",
   "menu.title": "<font color='red'>HLstatsX</font> - {0}",
   "menu.rank": "\u2654 Sıralama: #{0} ({1})",
   "menu.skill": "\u2605 Skill: {0} {1}",

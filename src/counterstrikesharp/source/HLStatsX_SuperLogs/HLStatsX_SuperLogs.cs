@@ -26,15 +26,17 @@ public class HLStatsXConfig : BasePluginConfig
 public class HLStatsX_SuperLogs : BasePlugin, IPluginConfig<HLStatsXConfig>
 {
     public override string ModuleName => "HLStatsX:CE SuperLogs CS2";
-    public override string ModuleVersion => "2.2";
+    public override string ModuleVersion => "2.3";
     public override string ModuleAuthor => "lovasatt";
 
     public HLStatsXConfig Config { get; set; } = new HLStatsXConfig();
     
     private readonly Dictionary<int, Dictionary<string, WeaponStats>> _playerStats = new();
+    private readonly Dictionary<int, string> _lastActiveWeapon = new();
     private UdpClient? _udpClient;
     private IPEndPoint? _remoteEndPoint;
     private bool _isWarmup = false;
+    private DateTime _lastNetworkRetry = DateTime.MinValue;
 
     public void OnConfigParsed(HLStatsXConfig config)
     {
@@ -46,17 +48,17 @@ public class HLStatsX_SuperLogs : BasePlugin, IPluginConfig<HLStatsXConfig>
     {
         RegisterEventHandler<EventPlayerHurt>(OnPlayerHurt);
         RegisterEventHandler<EventPlayerDeath>(OnPlayerDeath);
+        RegisterEventHandler<EventItemEquip>(OnItemEquip);
         RegisterEventHandler<EventWeaponFire>(OnWeaponFire);
         RegisterEventHandler<EventRoundStart>(OnRoundStart);
         RegisterEventHandler<EventPlayerDisconnect>(OnPlayerDisconnect);
+        RegisterEventHandler<EventPlayerConnectFull>(OnPlayerConnectFull);
         RegisterEventHandler<EventWarmupEnd>((@e, @i) => 
         { 
             _isWarmup = false; 
             LogToUDP($"Started map \"{Server.MapName}\"", true); 
             return HookResult.Continue; 
         });
-
-        InitNetwork();
 
         if (hotReload)
         {
@@ -80,13 +82,30 @@ public class HLStatsX_SuperLogs : BasePlugin, IPluginConfig<HLStatsXConfig>
         {
             _udpClient?.Dispose();
             _udpClient = new UdpClient();
-            if (IPAddress.TryParse(Config.Host, out var ip))
+            _remoteEndPoint = null;
+            if (string.IsNullOrWhiteSpace(Config.Host))
+            {
+                Console.WriteLine("[SuperLogs] HLStats_Host is empty.");
+                return;
+            }
+            string host = Config.Host.Trim();
+
+            if (host.Equals("localhost", StringComparison.OrdinalIgnoreCase))
+            {
+                _remoteEndPoint = new IPEndPoint(IPAddress.Loopback, Config.Port);
+            }
+            else if (IPAddress.TryParse(host, out var ip))
             {
                 _remoteEndPoint = new IPEndPoint(ip, Config.Port);
+            }
+            else
+            {
+                Console.WriteLine($"[SuperLogs] Invalid IP address format: '{Config.Host}'. Only raw IPv4 addresses (or 'localhost') are supported.");
             }
         }
         catch (Exception ex)
         {
+            _remoteEndPoint = null;
             Console.WriteLine($"[SuperLogs] Network Error: {ex.Message}");
         }
     }
@@ -105,7 +124,7 @@ public class HLStatsX_SuperLogs : BasePlugin, IPluginConfig<HLStatsXConfig>
             return (player?.TeamNum == 3) ? "knife" : "knife_t";
         }
 
-        if (player != null && player.IsValid && player.PlayerPawn.Value != null)
+        if (player != null && player.IsValid && player.PlayerPawn?.Value != null)
         {
             var activeWeapon = player.PlayerPawn.Value.WeaponServices?.ActiveWeapon.Value;
             if (activeWeapon != null)
@@ -121,7 +140,7 @@ public class HLStatsX_SuperLogs : BasePlugin, IPluginConfig<HLStatsXConfig>
 
                     23 => "mp5sd",
                     63 => "cz75a",
-                    519 => "negev",
+                    28 => "negev",
 
                     _  => weapon
                 };
@@ -135,11 +154,20 @@ public class HLStatsX_SuperLogs : BasePlugin, IPluginConfig<HLStatsXConfig>
         return string.IsNullOrEmpty(weapon) ? "unknown" : weapon;
     }   
 
+    private HookResult OnItemEquip(EventItemEquip @event, GameEventInfo info)
+    {
+        if (_isWarmup || @event.Userid == null || !@event.Userid.IsValid) return HookResult.Continue;
+        string weapon = GetVerifiedWeaponName(@event.Userid, @event.Item);
+        _lastActiveWeapon[@event.Userid.Slot] = weapon;
+        return HookResult.Continue;
+    }
+
     private HookResult OnWeaponFire(EventWeaponFire @event, GameEventInfo info)
     {
         if (_isWarmup || @event.Userid == null || !@event.Userid.IsValid) return HookResult.Continue;
 
         string weapon = GetVerifiedWeaponName(@event.Userid, @event.Weapon);
+        _lastActiveWeapon[@event.Userid.Slot] = weapon;
         if (!IsIgnoredForShots(weapon))
         {
             GetWeaponStatsSafe(@event.Userid.Slot, weapon).Shots++;
@@ -190,8 +218,8 @@ public class HLStatsX_SuperLogs : BasePlugin, IPluginConfig<HLStatsXConfig>
             
             DumpPlayerStats(attacker);
         }
-
-        GetWeaponStatsSafe(victim.Slot, weapon).Deaths++;
+        string victimWeapon = GetPlayerActiveWeapon(victim);
+        GetWeaponStatsSafe(victim.Slot, victimWeapon).Deaths++;
         DumpPlayerStats(victim);
 
         return HookResult.Continue;
@@ -199,9 +227,20 @@ public class HLStatsX_SuperLogs : BasePlugin, IPluginConfig<HLStatsXConfig>
 
     private HookResult OnPlayerDisconnect(EventPlayerDisconnect @event, GameEventInfo info)
     {
-        if (@event.Userid != null)
+        if (@event.Userid != null && @event.Userid.IsValid)
         {
+            DumpPlayerStats(@event.Userid);
             _playerStats.Remove(@event.Userid.Slot);
+            _lastActiveWeapon.Remove(@event.Userid.Slot);
+        }
+        return HookResult.Continue;
+    }
+
+    private HookResult OnPlayerConnectFull(EventPlayerConnectFull @event, GameEventInfo info)
+    {
+        if (@event.Userid != null && @event.Userid.IsValid)
+        {
+            InitPlayerStats(@event.Userid.Slot);
         }
         return HookResult.Continue;
     }
@@ -215,14 +254,19 @@ public class HLStatsX_SuperLogs : BasePlugin, IPluginConfig<HLStatsXConfig>
     private void DumpPlayerStats(CCSPlayerController player)
     {
         if (player == null || !_playerStats.TryGetValue(player.Slot, out var weaponData)) return;
-
+        string? playerLog = GetPlayerLogString(player);
+        if (playerLog == null)
+        {
+            weaponData.Clear();
+            return;
+        }
         foreach (var kvp in weaponData)
         {
             if (kvp.Value.IsEmpty()) continue;
         
             if (kvp.Value.Shots == 0 && kvp.Value.Hits > 0) kvp.Value.Shots = kvp.Value.Hits;
 
-            string msg = $"\"{GetPlayerLogString(player)}\" triggered \"weapon_stats\" (weapon \"{kvp.Key}\") (shots \"{kvp.Value.Shots}\") (hits \"{kvp.Value.Hits}\") (kills \"{kvp.Value.Kills}\") (headshots \"{kvp.Value.Headshots}\") (damage \"{kvp.Value.Damage}\") (head \"{kvp.Value.HitGroups[1]}\") (chest \"{kvp.Value.HitGroups[2]}\") (stomach \"{kvp.Value.HitGroups[3]}\") (leftarm \"{kvp.Value.HitGroups[4]}\") (rightarm \"{kvp.Value.HitGroups[5]}\") (leftleg \"{kvp.Value.HitGroups[6]}\") (rightleg \"{kvp.Value.HitGroups[7]}\") (generic \"{kvp.Value.HitGroups[0]}\")";
+            string msg = $"\"{playerLog}\" triggered \"weapon_stats\" (weapon \"{kvp.Key}\") (shots \"{kvp.Value.Shots}\") (hits \"{kvp.Value.Hits}\") (kills \"{kvp.Value.Kills}\") (headshots \"{kvp.Value.Headshots}\") (damage \"{kvp.Value.Damage}\") (deaths \"{kvp.Value.Deaths}\") (head \"{kvp.Value.HitGroups[1]}\") (chest \"{kvp.Value.HitGroups[2]}\") (stomach \"{kvp.Value.HitGroups[3]}\") (leftarm \"{kvp.Value.HitGroups[4]}\") (rightarm \"{kvp.Value.HitGroups[5]}\") (leftleg \"{kvp.Value.HitGroups[6]}\") (rightleg \"{kvp.Value.HitGroups[7]}\") (generic \"{kvp.Value.HitGroups[0]}\")";
         
             LogToUDP(msg);
         }
@@ -240,9 +284,14 @@ public class HLStatsX_SuperLogs : BasePlugin, IPluginConfig<HLStatsXConfig>
             _udpClient.Send(data, data.Length, _remoteEndPoint);
         }
         catch (Exception ex)
-	{
-	    Console.WriteLine($"[SuperLogs] UDP Send Error: {ex.Message}");
-	}
+        {
+            Console.WriteLine($"[SuperLogs] UDP Send Error: {ex.Message}");
+            if ((DateTime.Now - _lastNetworkRetry).TotalSeconds > 30)
+            {
+                _lastNetworkRetry = DateTime.Now;
+                InitNetwork();
+            }
+        }
     }
 
     private void CheckWarmupStatus()
@@ -263,11 +312,40 @@ public class HLStatsX_SuperLogs : BasePlugin, IPluginConfig<HLStatsXConfig>
         return _playerStats[slot][weapon];
     }
 
-    private string GetPlayerLogString(CCSPlayerController p)
+    private string GetPlayerActiveWeapon(CCSPlayerController? player)
     {
+        if (player == null || !player.IsValid) return "unknown";
+        if (_lastActiveWeapon.TryGetValue(player.Slot, out var trackedWeapon))
+        {
+            return trackedWeapon;
+        }
+        if (player.PlayerPawn?.Value != null)
+        {
+            var activeWeapon = player.PlayerPawn.Value.WeaponServices?.ActiveWeapon.Value;
+            if (activeWeapon != null && activeWeapon.IsValid)
+            {
+                string designerName = activeWeapon.DesignerName ?? "";
+                if (!string.IsNullOrEmpty(designerName))
+                {
+                    return GetVerifiedWeaponName(player, designerName);
+                }
+            }
+        }
+        return "unknown";
+    }
+
+    private string? GetPlayerLogString(CCSPlayerController p)
+    {
+        if (p == null || !p.IsValid || string.IsNullOrEmpty(p.PlayerName) || p.UserId == null)
+        {
+            return null;
+        }
         string steamId = (p.AuthorizedSteamID != null) ? p.AuthorizedSteamID.SteamId2 : "BOT";
         string team = p.TeamNum switch { 2 => "TERRORIST", 3 => "CT", _ => "Unassigned" };
-        return $"{p.PlayerName}<{p.UserId}><{steamId}><{team}>";
+        string name = p.PlayerName
+            .Replace("\\", "")
+            .Replace("\"", "");
+        return $"{name}<{p.UserId}><{steamId}><{team}>";
     }
 
     private bool IsIgnoredForShots(string w) => 
