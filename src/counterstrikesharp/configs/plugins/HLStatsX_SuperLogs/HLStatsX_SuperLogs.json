@@ -1,6 +1,10 @@
 {
   "HLStats_Host": "127.0.0.1", //IP address of the HLStatsX Daemon or UDP Forwarder
-  "HLStats_Port": 26999, //Port of the HLStatsX Daemon or UDP Forwarder
+  "HLStats_Port": 27500, //Port of the HLStatsX Daemon or UDP Forwarder
   "Enable_Logging": true, //Enable UDP logging
+  "Use_Proxy_Forwarding": true, //Enable HLStatsX PROXY header forwarding (replaces UDP Forwarder PROXY_KEY function)
+  "Proxy_Key": "d7fe18f9c4d10180f2aa6393", //HLStatsX:CE PROXY_KEY secret, dummy_key, change it!
+  "GameServer_IP": "192.168.1.100", //Game server IP address reported to HLStatsX:CE
+  "GameServer_Port": 27015, //Game server port reported to HLStatsX:CE
   "ConfigVersion": 1
 }

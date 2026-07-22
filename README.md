@@ -13,13 +13,14 @@ Edition uses a Perl daemon to parse the log streamed from the
 game server. The data is stored in a MySQL Database and has
 a PHP frontend.
 
-Counter-Strike 2 is supported, via [`source-udp-forwarder`](https://github.com/startersclan/source-udp-forwarder).
+Counter-Strike 2 is natively supported: the updated hlstats.pl daemon handles both UDP and HTTP log streaming directly alongside the CS2 SuperLogs plugin (legacy [`source-udp-forwarder`](https://github.com/startersclan/source-udp-forwarder) remains available as an optional profile).
 
 ## :loudspeaker: Important changes
 
 | Date | Description / Feature | Support Status / Additional Information |
 | :--- | :--- | :--- |
-| 2026-07-15 | **CounterStrikeSharp 1.0.371 & .NET 10 Compatibility Update** | **Plugin fixes, stability improvements, and responsive UI updates.** |
+| 2026-07-22 | **Direct Dual-Protocol Log Streaming & SuperLogs v2.4** | **Native HTTP & UDP listening on port 27500. Standalone UDP Forwarder made optional via Docker profile.** |
+| 2026-07-15 | CounterStrikeSharp 1.0.371 & .NET 10 Compatibility Update | Plugin fixes, stability improvements, and responsive UI updates. |
 | 2026-05-16 | CS2 Knife fix (T/CT differentiation) | Correctly logs basic knife as `knife_t` for Terrorists and `knife` for CTs; resolves inaccurate kill stats in SuperLogs |
 | 2026-04-23 | v1.12.3 - AG2 & Hitgroup Fix | Critical update for CS2 AnimGraph 2 engine changes. Restores precise hitgroup logging and stability. |
 | 2026-03-14 | Modern Docker Stack | PHP 8.4, Debian 13, Automated DB init & CI verification. 🚀 |
@@ -57,10 +58,26 @@ All required files are located within the **`/src`** directory.
    chown -R www-data:www-data /path/to/src/web
    chmod -R 755 /path/to/src/web
    ```
-5. **Log Streaming:** To ensure the game server streams logs correctly to your daemon, add the following parameters to your CS2 server startup script (launch options):
-   ```bash
-   +log on +logaddress_add_http "http://your_ip:26999" (to source-udp-forwarder)
-   ```
+5. **Log Streaming:** To ensure game servers stream logs correctly to your daemon (port 27500):
+    **Counter-Strike 2 (Source 2) Native HTTP:** Add the following parameter to your CS2 server launch options:
+     ```bash
+     +log on +logaddress_add_http "http://HLSTATSX_SERVER_IP:HLSTATSX_PORT/GAMESERVER_PORT"
+     ```
+     *Example:*
+     ```bash
+     +log on +logaddress_add_http "http://192.168.1.1:27500/27015"
+     ```
+    **Source 1 Games (CS:S, TF2, CS:GO, DoD:S) server.cfg:**
+     ```cfg
+     log on
+     logaddress_add YOUR_HLSTATSX_SERVER_IP:HLSTATSX_SERVER_PORT
+     ```
+     *Example:*
+     ```bash
+     log on
+     logaddress_add 192.168.1.1:27500
+     ```
+
 6. **CS2 Dedicated Server Integration:**
 To enable real-time tracking for Counter-Strike 2:<br>
     Deploy Plugins: Copy the pre-compiled plugins from `./src/counterstrikesharp/plugins/` to your server's directory:<br>
@@ -106,7 +123,7 @@ URL: http://your-server-ip/ (or http://localhost/)
 Default Admin: admin
 Default Password: 123456
 ```
-Ensure no other service is using the same ports (default: web 80, mariadb 3306, daemon 27500, forwarder 26999).
+Ensure no other service is using the same ports (default: web 80, mariadb 3306, daemon 27500).
 
 ### Docker Compose
 
@@ -115,16 +132,18 @@ The stack is managed via a single `docker-compose.yml` file. Database initializa
 | Service | Internal Port | External Port | Protocol | Description |
 | :--- | :--- | :--- | :--- | :--- |
 | **Web** | 80 | **80** | TCP | Web Interface (Admin: `admin` / `123456`) |
-| **Forwarder**| 26999 | **26999** | TCP/UDP | Connect your cs2 gameserver here (`+logaddress_add_http "http://your-server-ip:26999"`) |
-| **Daemon** | 27500 | **27500** | UDP | Internal log processor |
+| **Forwarder (Optional)**| 26999 | **26999** | TCP/UDP | Legacy UDP proxying (Enable via COMPOSE_PROFILES=forwarder) |
+| **Daemon** | 27500 | **27500** | TCP/UDP | Direct log processor (+logaddress_add_http or direct UDP) |
 | **Database** | 3306 | **3306** | TCP | MariaDB server |
 
+- **Direct Logging:** Direct daemon logging (port 27500) is natively supported for all games including Counter-Strike 2. The Legacy UDP Forwarder is disabled by default to save resources.
+- **Enabling Legacy Forwarder:** If you run legacy UDP setups targeting port 26999, uncomment COMPOSE_PROFILES=forwarder in your .env or run docker compose --profile forwarder up -d.
 - **Automated Init:** The `install.sql` is automatically imported into the MariaDB container on the first run. 
 - **Dynamic Setup:** The `PROXY_KEY` from your `.env` file is automatically injected into the database and configuration files during startup.
 - **Port Conflict:** If port 80 or 3306 etc is already in use on your host, change the mapping in your `.env` (e.g., `WEB_PORT=81`).
 
-Note: Forwarder is required only for Counter-Strike 2. For other Source engine games, direct daemon logging is sufficient.
-When adding your game server via the web interface, set the Daemon IP/Hostname to hlx-daemon (not localhost) so that HLX:CE can properly reload/restart. After changes, reload or restart the daemon for them to take effect.
+Note: Direct daemon logging (port 27500) is natively supported for all games, including Counter-Strike 2. The UDP Forwarder is optional and disabled by default.
+When adding your game server via the web interface, set the Daemon IP/Hostname to `hlx-daemon` (not `localhost`) so that HLX:CE can properly communicate with the daemon. After making configuration changes, reload or restart the daemon for them to take effect.
 
 ### Upgrading (docker)
 
@@ -217,8 +236,8 @@ docker compose logs -f web
 # Daemon (Perl log parser) logs
 docker compose logs -f daemon
 
-# UDP Forwarder logs from game servers
-docker compose logs -f forwarder
+# UDP Forwarder logs (only if using legacy profile)
+docker compose --profile forwarder logs -f forwarder
 
 # MariaDB container logs
 docker compose logs -f db
@@ -226,7 +245,7 @@ docker compose logs -f db
 **System Management:**
 ```bash
 # Restart services individually
-docker compose restart daemon web forwarder db
+docker compose restart daemon web db
 
 # Stop and remove containers (keeps volumes/data)
 docker compose down
@@ -247,13 +266,11 @@ A: This is normal during the first launch. The MariaDB container needs time to i
 
 ### Q: My game server logs are not appearing in the stats.
 A: Check the following:
-1. **Proxy key:** Ensure the `PROXY_KEY` in your `.env` matches the key in **Web Admin Panel > HLStatsX Settings**.
-2. **Forwarder (CS2 only):** Counter-Strike 2 requires the Forwarder UDP port (`26999`) to be reachable. Other Source engine games can log directly to the daemon.
-3. **Daemon IP/Hostname:** When adding a game server in the web interface, set **Daemon IP/Hostname** to `hlx-daemon` (not `localhost`) to ensure the daemon reloads properly.
-4. **Forwarder logs (CS2):**
-```bash
-docker compose logs -f forwarder
-```
+1. **Proxy key:** Ensure the `PROXY_KEY` in your `.env` matches the key in **Web Admin Panel > HLStatsX Settings** and in your `HLStatsX_SuperLogs.json`.
+2. **Port connectivity:** Ensure port `27500` (both UDP and TCP) is open in your server host firewall (e.g. UFW or Cloud Security Groups).
+3. **CS2 Launch Option / Plugin:** Ensure your CS2 server uses `+logaddress_add_http "http://your_server_ip:27500/27015"` or the `HLStatsX_SuperLogs` plugin configured with port `27500`.
+4. **Daemon IP/Hostname:** When adding a game server in the web interface, set **Daemon IP/Hostname** to `hlx-daemon` (not `localhost`) to ensure the daemon reloads properly.
+
 ### Q: How do I change the web port from 80 to something else?
 A: Set the `WEB_PORT` variable in your `.env` file (e.g., `WEB_PORT=81`) and then restart the stack:
 ```bash

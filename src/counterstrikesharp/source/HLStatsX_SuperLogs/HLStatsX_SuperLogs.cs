@@ -16,17 +16,30 @@ public class HLStatsXConfig : BasePluginConfig
         public string Host { get; set; } = "127.0.0.1"; //IP address of the HLStatsX Daemon or UDP Forwarder
 
         [JsonPropertyName("HLStats_Port")]
-        public int Port { get; set; } = 26999; //Port of the HLStatsX Daemon or UDP Forwarder
+        public int Port { get; set; } = 27500; //Port of the HLStatsX Daemon or UDP Forwarder
 
         [JsonPropertyName("Enable_Logging")]
         public bool Enable { get; set; } = true; //Enable UDP logging
+
+        [JsonPropertyName("Use_Proxy_Forwarding")]
+        public bool UseProxyForwarding { get; set; } = true; //Enable HLStatsX PROXY header forwarding (replaces UDP Forwarder PROXY_KEY function)
+
+        [JsonPropertyName("Proxy_Key")]
+        public string ProxyKey { get; set; } = "d7fe18f9c4d10180f2aa6393"; //HLStatsX:CE PROXY_KEY secret, dummy_key, change it!
+
+        [JsonPropertyName("GameServer_IP")]
+        public string GameServerIP { get; set; } = "192.168.1.100"; //Game server IP address reported to HLStatsX:CE
+
+        [JsonPropertyName("GameServer_Port")]
+        public int GameServerPort { get; set; } = 27015; //Game server port reported to HLStatsX:CE
+
 }
 
 [MinimumApiVersion(80)]
 public class HLStatsX_SuperLogs : BasePlugin, IPluginConfig<HLStatsXConfig>
 {
     public override string ModuleName => "HLStatsX:CE SuperLogs CS2";
-    public override string ModuleVersion => "2.3";
+    public override string ModuleVersion => "2.4";
     public override string ModuleAuthor => "lovasatt";
 
     public HLStatsXConfig Config { get; set; } = new HLStatsXConfig();
@@ -41,6 +54,35 @@ public class HLStatsX_SuperLogs : BasePlugin, IPluginConfig<HLStatsXConfig>
     public void OnConfigParsed(HLStatsXConfig config)
     {
         this.Config = config;
+        if (Config.UseProxyForwarding)
+        {
+            bool error = false;
+            if (string.IsNullOrWhiteSpace(Config.ProxyKey))
+            {
+                Console.WriteLine("[SuperLogs] ERROR: Proxy_Key is invalid!");
+                error = true;
+            }
+            if (string.IsNullOrWhiteSpace(Config.GameServerIP))
+            {
+                Console.WriteLine("[SuperLogs] ERROR: GameServer_IP is empty!");
+                error = true;
+            }
+            else if (!IPAddress.TryParse(Config.GameServerIP, out _))
+            {
+                Console.WriteLine("[SuperLogs] ERROR: Invalid GameServer_IP!");
+                error = true;
+            }
+            if (Config.GameServerPort <= 0 || Config.GameServerPort > 65535)
+            {
+                Console.WriteLine("[SuperLogs] ERROR: Invalid GameServer_Port!");
+                error = true;
+            }
+            if (error)
+            {
+                Console.WriteLine("[SuperLogs] Proxy forwarding disabled.");
+                Config.UseProxyForwarding = false;
+            }
+        }
         InitNetwork();
     }
 
@@ -280,7 +322,20 @@ public class HLStatsX_SuperLogs : BasePlugin, IPluginConfig<HLStatsXConfig>
         try
         {
             string timestamp = DateTime.Now.ToString("MM/dd/yyyy - HH:mm:ss");
-            byte[] data = Encoding.UTF8.GetBytes($"L {timestamp}: {msg}\n");
+            string packet;
+            if (Config.UseProxyForwarding)
+            {
+                packet =
+                    $"PROXY Key={Config.ProxyKey} " +
+                    $"{Config.GameServerIP}:{Config.GameServerPort}PROXY " +
+                    $"L {timestamp}: {msg}\n";
+            }
+            else
+            {
+                packet =
+                    $"L {timestamp}: {msg}\n";
+            }
+            byte[] data = Encoding.UTF8.GetBytes(packet);
             _udpClient.Send(data, data.Length, _remoteEndPoint);
         }
         catch (Exception ex)

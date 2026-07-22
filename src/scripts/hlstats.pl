@@ -1984,14 +1984,28 @@ if ($g_stdin) {
 		$s_addr = "$s_peerhost:$s_peerport";
 	}
 } else {
-	if ($s_ip) { $ip = $s_ip . ":"; } else { $ip = "port "; }
-	$s_socket = IO::Socket::INET->new(
-		Proto=>"udp",
-		LocalAddr=>"$s_ip",
-		LocalPort=>"$s_port"
-	) or die ("\nCan't setup UDP socket on $ip$s_port: $!\n");
-	
-	&printEvent("UDP", "Opening UDP listen socket on $ip$s_port ... ok", 1);
+    if ($s_ip) { $ip = $s_ip . ":"; } else { $ip = "port "; }
+    $s_socket = IO::Socket::INET->new(
+	Proto=>"udp",
+	LocalAddr=>"$s_ip",
+	LocalPort=>"$s_port"
+    ) or die ("\nCan't setup UDP socket on $ip$s_port: $!\n");
+    
+    &printEvent("UDP", "Opening UDP listen socket on $ip$s_port ... ok", 1);
+
+    $tcp_socket = IO::Socket::INET->new(
+	Proto     => 'tcp',
+	LocalPort => "$s_port",
+	LocalAddr => "$s_ip",
+	Listen    => 20,
+	Reuse     => 1
+    ) or die ("\nCan't setup TCP socket on $ip$s_port: $!\n");
+    
+    &printEvent("TCP", "Opening TCP listen socket on $ip$s_port ... ok", 1);
+
+    $select = IO::Select->new();
+    $select->add($s_socket);
+    $select->add($tcp_socket);
 }
 
 if ($g_track_stats_trend > 0) {
@@ -2048,8 +2062,10 @@ sub getLine
 	}
 }
 
-
 &execNonQuery("TRUNCATE TABLE hlstats_Livestats");
+
+@global_pending_queue = ();
+
 $timeout    = 0;
 $s_output = "";
 my ($proxy_s_peerhost, $proxy_s_peerport);
@@ -2057,73 +2073,191 @@ while ($loop = &getLine()) {
 
     my ($sec,$min,$hour,$mday,$mon,$year) = localtime(time());
     $ev_timestamp = sprintf("%04d-%02d-%02d %02d:%02d:%02d", $year+1900, $mon+1, $mday, $hour, $min, $sec);
-	$ev_unixtime  = time();
-	$ev_daemontime = $ev_unixtime; #time()
+    $ev_unixtime  = time();
+    $ev_daemontime = $ev_unixtime;
 
-	if ($g_stdin) {
-		$s_output = $loop;
-		if (($import_logs_count > 0) && ($import_logs_count % 500 == 0)) {
-			$parse_time = $ev_unixtime - $start_parse_time;
-			if ($parse_time == 0) {
-				$parse_time++;
+    if (!@global_pending_queue) {
+        if ($g_stdin) {
+            push(@global_pending_queue, {
+	    data => $loop,
+	    peerhost => $g_server_ip,
+	    peerport => $g_server_port,
+	    timeout => 0,
+        is_tcp => 0
+	});
+    } else {
+        my @ready = $select->can_read(2);
+        if (@ready) {
+        $timeout = 0;
+        foreach my $socket (@ready) {
+	if ($socket == $s_socket) {
+	my $datagram;
+	$s_socket->recv($datagram, 8192);
+	$datagram = decode('utf8', $datagram);
+	push(@global_pending_queue, {
+    	    data => $datagram,
+    	    peerhost => $s_socket->peerhost,
+    	    peerport => $s_socket->peerport,
+    	    timeout => 0,
+	    is_tcp => 0
+            });
+        } elsif ($socket == $tcp_socket) {
+	    my $client = $tcp_socket->accept();
+	    if (defined $client) {
+    		my $peer_ip = $client->peerhost();
+
+    		my $client_select = IO::Select->new($client);
+    		if ($client_select->can_read(1)) {
+		    my $data = "";
+		    $client->sysread($data, 16384);
+	
+		    if ($data =~ /^POST/i) {
+	    		my ($headers, $body) = split(/\r?\n\r?\n/, $data, 2);
+	    		$body //= "";
+	    
+	    		if ($headers =~ /Content-Length:\s*(\d+)/i) {
+	        	my $content_length = $1;
+	        	while (length($body) < $content_length) {
+			    my $chunk;
+			    last unless $client_select->can_read(1);
+			    $client->sysread($chunk, 8192);
+			    last unless length($chunk);
+			    $body .= $chunk;
 			}
-			print ". [".($parse_time)." sec (".sprintf("%.3f", (500 / $parse_time)).")]\n";
-			$start_parse_time = $ev_unixtime;
-		}
+	    	    }
+	    
+	    	    my $gameserver_port = 27015;
+	    	    if ($headers =~ /POST\s+\/(\d+)/i) {
+			$gameserver_port = $1;
+	    	        }
+	    
+	    	        my @lines = split(/\n/, $body);
+	    	        foreach my $line (@lines) {
+			    $line =~ s/\r//g;
+			    next if $line =~ /^\s*$/;
+			    push(@global_pending_queue, {
+			        data => $line,
+			        peerhost => $peer_ip,
+			        peerport => $gameserver_port,
+			        timeout => 0,
+			        is_tcp => 1,
+			        proxy_key_matched => 1
+			    });
+	    	        }
+	    	        print $client "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK";
+		    } elsif ($data =~ /^PROXY/i) {
+	    	        my @lines = split(/\n/, $data);
+	    	        foreach my $line (@lines) {
+			    $line =~ s/\r//g;
+			    next if $line =~ /^\s*$/;
+			    if ($line =~ /^PROXY\s+Key=([a-fA-F0-9]+)\s+([\d\.]+):(\d+)PROXY\s+(.*)$/s) {
+			        my $key = $1;
+			        my $gs_ip = $2;
+			        my $gs_port = $3;
+			        my $log_line = $4;
+	        
+			        push(@global_pending_queue, {
+			            data => $log_line,
+			            peerhost => $gs_ip,
+			            peerport => $gs_port,
+			            timeout => 0,
+			            is_tcp => 1,
+			            proxy_key_matched => ($key eq $proxy_key)
+			            });
+		                }
+		            }
+	                }
+	            }
+	            $client->close();
+	            }
+	        }
+    	    }
 	} else {
-		if(IO::Select->new($s_socket)->can_read(2)) {  # 2 second timeout
-			$s_socket->recv($s_output, 1024);
-			$s_output = decode( 'utf8', $s_output );
-			$timeout = 0;
-		} else {
-			$timeout++;
-			if ($timeout % 60 == 0) {
-				&printEvent("HLSTATSX", "No data since 120 seconds");
-			}    
-		}
-
-		if (($s_output =~ /^.*PROXY Key=(.+) (.*)PROXY.+/) && $proxy_key ne "") {
-			$rproxy_key = $1;
-			$s_addr = $2;
-
-			if ($s_addr ne "") {
-				($s_peerhost, $s_peerport) = split(/:/, $s_addr);
-			}
-
-			$proxy_s_peerhost = $s_socket->peerhost;
-			$proxy_s_peerport  = $s_socket->peerport;
-			&printEvent("PROXY", "Detected proxy call from $proxy_s_peerhost:$proxy_s_peerport") if ($d_debug > 2);
-
-
-			if ($proxy_key eq $rproxy_key) {
-				$s_output =~ s/PROXY.*PROXY //;
-				if ($s_output =~ /^C;HEARTBEAT;/) {
-					&printEvent("PROXY, Heartbeat request from $proxy_s_peerhost:$proxy_s_peerport");
-				} elsif ($s_output =~ /^C;RELOAD;/) {
-					&printEvent("PROXY, Reload request from $proxy_s_peerhost:$proxy_s_peerport");
-				} elsif ($s_output =~ /^C;KILL;/) {
-					&printEvent("PROXY, Kill request from $proxy_s_peerhost:$proxy_s_peerport");
-				} else {
-					&printEvent("PROXY", $s_output);
-				}
-			} else {
-				&printEvent("PROXY", "proxy_key mismatch, dropping package");
-				&printEvent("PROXY", $s_output) if ($g_debug > 2);
-				$s_output = "";
-				next;
-			}
-		} else {
-			# Reset the proxy stuff and use it as "normal"
-			$rproxy_key = "";
-			$proxy_s_peerhost = "";
-			$proxy_s_peerport = "";
-
-			$s_peerhost  = $s_socket->peerhost;
-			$s_peerport  = $s_socket->peerport;
-
-			$s_addr = "$s_peerhost:$s_peerport";
-		}
+    	    $timeout++;
+    	    if ($timeout % 60 == 0) {
+	        &printEvent("HLSTATSX", "No data since 120 seconds");
+	        }
+		push(@global_pending_queue, {
+		    data => "",
+		    peerhost => "",
+		    peerport => "",
+		    timeout => $timeout,
+	            is_tcp => 0
+		});
+    	    }
 	}
+    }
+
+    my $packet = shift(@global_pending_queue);
+    
+    $timeout    = $packet->{timeout};
+    $s_output   = $packet->{data};
+    
+    if ($timeout == 0) {
+        $s_peerhost = $packet->{peerhost};
+        $s_peerport = $packet->{peerport};
+        $s_addr     = "$s_peerhost:$s_peerport";
+    }
+
+    if ($g_stdin && $s_output ne "") {
+	if (($import_logs_count > 0) && ($import_logs_count % 500 == 0)) {
+	    $parse_time = $ev_unixtime - $start_parse_time;
+	    if ($parse_time == 0) {
+		$parse_time++;
+    	    }
+    	    print ". [".($parse_time)." sec (".sprintf("%.3f", (500 / $parse_time)).")]\n";
+    	    $start_parse_time = $ev_unixtime;
+	}
+    }
+
+    if ($timeout == 0) {
+        if ($packet->{is_tcp}) {
+        $rproxy_key = $packet->{proxy_key_matched} ? $proxy_key : "";
+        $proxy_s_peerhost = "";
+        $proxy_s_peerport = "";
+        } else {
+    	    if (($s_output =~ /^.*PROXY Key=(.+) (.*)PROXY.+/) && $proxy_key ne "") {
+        	$rproxy_key = $1;
+        	$s_addr = $2;
+
+        	if ($s_addr ne "") {
+		($s_peerhost, $s_peerport) = split(/:/, $s_addr);
+        	}
+
+        	$proxy_s_peerhost = $s_socket->peerhost;
+        	$proxy_s_peerport  = $s_socket->peerport;
+        	&printEvent("PROXY", "Detected proxy call from $proxy_s_peerhost:$proxy_s_peerport") if ($d_debug > 2);
+
+        	if ($proxy_key eq $rproxy_key) {
+		$s_output =~ s/PROXY.*PROXY //;
+		    if ($s_output =~ /^C;HEARTBEAT;/) {
+	    		&printEvent("PROXY, Heartbeat request from $proxy_s_peerhost:$proxy_s_peerport");
+		    } elsif ($s_output =~ /^C;RELOAD;/) {
+	    		&printEvent("PROXY, Reload request from $proxy_s_peerhost:$proxy_s_peerport");
+		    } elsif ($s_output =~ /^C;KILL;/) {
+	    		&printEvent("PROXY, Kill request from $proxy_s_peerhost:$proxy_s_peerport");
+		    } else {
+	    		&printEvent("PROXY", $s_output);
+		    }
+        	} else {
+		    &printEvent("PROXY", "proxy_key mismatch, dropping package");
+		    &printEvent("PROXY", $s_output) if ($g_debug > 2);
+		    $s_output = "";
+		    next;
+        	}
+            } else {
+        	$rproxy_key = "";
+        	$proxy_s_peerhost = "";
+        	$proxy_s_peerport = "";
+
+        	if ($s_socket) {
+		$s_peerhost  = $s_socket->peerhost;
+		$s_peerport  = $s_socket->peerport;
+		$s_addr = "$s_peerhost:$s_peerport";
+        	}
+            }
+        }
+    }
 
 	if ($timeout == 0) {
 		my ($address, $port);
@@ -2413,7 +2547,7 @@ while ($loop = &getLine()) {
 		
 		# EXPLOIT FIX
 		
-		if ($s_output =~ s/^(?:.*?)?L (\d\d)\/(\d\d)\/(\d{4}) - (\d\d):(\d\d):(\d\d)\.?(\d\d\d)?\s*[:-]\s*//) {
+		if ($s_output =~ s/^(?:.*?)?(?:L\s+)?(\d\d)\/(\d\d)\/(\d{4}) - (\d\d):(\d\d):(\d\d)\.?(\d\d\d)?\s*[:-]\s*//) {
 			$ev_month = $1;
 			$ev_day   = $2;
 			$ev_year  = $3;

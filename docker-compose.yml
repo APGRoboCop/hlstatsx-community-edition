@@ -56,6 +56,8 @@ services:
       context: .
       dockerfile: docker/forwarder/Dockerfile
     container_name: hlx-forwarder
+    profiles:
+      - forwarder
     restart: always
     environment:
       PROXY_KEY: "${PROXY_KEY:-dummy_key}"
