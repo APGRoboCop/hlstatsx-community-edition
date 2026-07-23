@@ -142,7 +142,7 @@ The stack is managed via a single `docker-compose.yml` file. Database initializa
 - **Dynamic Setup:** The `PROXY_KEY` from your `.env` file is automatically injected into the database and configuration files during startup.
 - **Port Conflict:** If port 80 or 3306 etc is already in use on your host, change the mapping in your `.env` (e.g., `WEB_PORT=81`).
 
-Note: Direct daemon logging (port 27500) is natively supported for all games, including Counter-Strike 2. The UDP Forwarder is optional and disabled by default.
+Note: The UDP Forwarder is optional and disabled by default.
 When adding your game server via the web interface, set the Daemon IP/Hostname to `hlx-daemon` (not `localhost`) so that HLX:CE can properly communicate with the daemon. After making configuration changes, reload or restart the daemon for them to take effect.
 
 ### Upgrading (docker)

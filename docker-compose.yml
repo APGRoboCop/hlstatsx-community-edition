@@ -50,6 +50,9 @@ services:
       DB_PASS: "${DB_PASS:-hlstatsx_password}"
       DB_HOST: "hlx-db"
       DAEMON_PORT: "27500"
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
 
   forwarder:
     build:
