@@ -1674,13 +1674,15 @@ sub readDatabaseConfig()
 	$srv_id->finish;
 	# hlxce: read the global settings from the database!
 	my $gsettings = &doQuery("SELECT keyname,value FROM hlstats_Options WHERE opttype <= 1");
-	while ( my($p,$v) = $gsettings->fetchrow_array) {
+	    while ( my($p,$v) = $gsettings->fetchrow_array) {
 		if ($g_debug > 1) {
-			print "Config parameter '$p' = '$v'\n";
+		    print "Config parameter '$p' = '$v'\n";
 		}
-		$tmp = "\$".$directives_mysql{$p}." = '$v'";
-		#print " -> setting ".$tmp."\n";
-		eval $tmp;
+		if (defined($directives_mysql{$p})) {
+		    my $var_name = $directives_mysql{$p};
+		    no strict 'refs';
+		    ${$var_name} = $v;
+		}
 	}
 	$gsettings->finish;
 	# setting defaults
@@ -2112,39 +2114,48 @@ while ($loop = &getLine()) {
 		    $client->sysread($data, 16384);
 	
 		    if ($data =~ /^POST/i) {
-	    		my ($headers, $body) = split(/\r?\n\r?\n/, $data, 2);
-	    		$body //= "";
-	    
-	    		if ($headers =~ /Content-Length:\s*(\d+)/i) {
-	        	my $content_length = $1;
-	        	while (length($body) < $content_length) {
-			    my $chunk;
-			    last unless $client_select->can_read(1);
-			    $client->sysread($chunk, 8192);
-			    last unless length($chunk);
-			    $body .= $chunk;
-			}
-	    	    }
-	    
-	    	    my $gameserver_port = 27015;
-	    	    if ($headers =~ /POST\s+\/(\d+)/i) {
-			$gameserver_port = $1;
-	    	        }
-	    
-	    	        my @lines = split(/\n/, $body);
-	    	        foreach my $line (@lines) {
-			    $line =~ s/\r//g;
-			    next if $line =~ /^\s*$/;
-			    push(@global_pending_queue, {
-			        data => $line,
-			        peerhost => $peer_ip,
-			        peerport => $gameserver_port,
-			        timeout => 0,
-			        is_tcp => 1,
-			        proxy_key_matched => 1
-			    });
-	    	        }
-	    	        print $client "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK";
+			        	    my ($headers, $body) = split(/\r?\n\r?\n/, $data, 2);
+			        	    $body //= "";
+        
+			        	    if ($headers =~ /Content-Length:\s*(\d+)/i) {
+					    my $content_length = int($1);
+					    if ($content_length > 131072) {
+					        $content_length = 131072;
+				           }
+				           while (length($body) < $content_length) {
+					        my $chunk;
+					        last unless $client_select->can_read(1);
+					        $client->sysread($chunk, 8192);
+					        last unless length($chunk);
+				    	        $body .= $chunk;
+					    }
+					}
+        
+					my $gameserver_port = 27015;
+					if ($headers =~ /POST\s+\/(\d+)/i) {
+					    $gameserver_port = $1;
+    	    				    }
+
+					my $req_key = "";
+    					if ($headers =~ /(?:X-Proxy-Key|Proxy-Key|Key):\s*([a-fA-F0-9]+)/i) {
+				    	    $req_key = $1;
+					}
+					my $key_matches = ($proxy_key ne "" && $req_key eq $proxy_key) ? 1 : 0;
+        
+					    my @lines = split(/\n/, $body);
+			    		    foreach my $line (@lines) {
+					        $line =~ s/\r//g;
+					        next if $line =~ /^\s*$/;
+					        push(@global_pending_queue, {
+					            data => $line,
+				            peerhost => $peer_ip,
+					            peerport => $gameserver_port,
+					            timeout => 0,
+					            is_tcp => 1,
+					            proxy_key_matched => $key_matches
+					        });
+    				            }
+    			            print $client "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK";
 		    } elsif ($data =~ /^PROXY/i) {
 	    	        my @lines = split(/\n/, $data);
 	    	        foreach my $line (@lines) {
