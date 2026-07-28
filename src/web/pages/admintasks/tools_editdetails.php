@@ -4,7 +4,7 @@ HLstatsX Community Edition - Real-time player and clan rankings and statistics
 Copyleft (L) 2008-20XX Nicholas Hastings (nshastings@gmail.com)
 http://www.hlxcommunity.com
 
-HLstatsX Community Edition is a continuation of 
+HLstatsX Community Edition is a continuation of
 ELstatsNEO - Real-time player and clan rankings and statistics
 Copyleft (L) 2008-20XX Malte Bayer (steam@neo-soft.org)
 http://ovrsized.neo-soft.org/
@@ -18,7 +18,7 @@ HLstatsX is an enhanced version of HLstats made by Simon Garner
 HLstats - Real-time player and clan rankings and statistics for Half-Life
 http://sourceforge.net/projects/hlstats/
 Copyright (C) 2001  Simon Garner
-            
+
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
 as published by the Free Software Foundation; either version 2
@@ -46,73 +46,54 @@ For support and installation notes visit http://www.hlxcommunity.com
     if (($auth->userdata["acclevel"] ?? 0) < 80) {
         die ("Access denied!");
     }
-    
+
 ?>
 
 &nbsp;&nbsp;&nbsp;&nbsp;<img src="<?php echo IMAGE_PATH; ?>/downarrow.gif" width="9" height="6" class="imageformat"><b>&nbsp;<?php echo htmlspecialchars($task->title); ?></b><p>
 
 <span style="padding-left:35px;">You can enter a player or clan ID number directly, or you can search for a player or clan.</span><p>
 
-<table style="width:95%;" align="center" border="0" cellspacing="0" cellpadding="0">
-
-<tr valign="top">
-    <td width="100%" class="fNormal">&nbsp;<img src="<?php echo IMAGE_PATH; ?>/downarrow.gif" width="9" height="6" class="imageformat"><b>&nbsp;Jump Direct</b><p>
-    
-	<form method="GET" action="<?php echo htmlspecialchars($g_options["scripturl"]); ?>">
-	<input type="hidden" name="mode" value="admin">
-	<table width="100%" border="0" cellspacing="0" cellpadding="0">
-	
-	<tr>
-	    <td width="5%">&nbsp;</td>
-	    <td width="95%">
-		<table width="40%" border="0" cellspacing="0" cellpadding="0" class="border">
-		
-		<tr valign="top" >
-		    <td>
-			<table width="100%" border="0" cellspacing="1" cellpadding="4">
-			<tr valign="middle" class="bg1">
-			    <td nowrap width="45%" class="fNormal">Type:</td>
-			    <td width="55%">
-				<?php
-				    echo getSelect("task",
-					array(
-					    "tools_editdetails_player"=>"Player",
-					    "tools_editdetails_clan"=>"Clan"
-					)
-				    );
-				?></td>
-			</tr>
-			
-			<tr valign="middle" class="bg1">
-			    <td nowrap width="45%" class="fNormal">ID Number:</td>
-			    <td width="55%"><input type="text" name="id" size="15" maxlength="12" class="textbox"></td>
-			</tr>
-			
-			</table></td>
-		    <td align="right">
-			<table border="0" cellspacing="0" cellpadding="10">
-			<tr>
-			    <td><input type="submit" value=" Edit &gt;&gt; " class="submit"></td>
-			</tr>
-			</table></td>
-		</tr>
-		
-		</table></td>
-	</tr>
-	
-	</table>
-	
-	</form></td>
-</tr>
-
-</table><p>
+<div class="block">
+    <?php printSectionTitle('Jump Direct'); ?>
+    <div class="subblock">
+        <form method="get" action="<?php echo htmlspecialchars($g_options['scripturl']); ?>">
+            <input type="hidden" name="mode" value="admin">
+            <table class="data-table" style="width:30%;">
+                <tr style="vertical-align:middle;" class="bg1">
+                    <td nowrap="nowrap" style="width:30%;">Type:</td>
+                    <td style="width:70%;">
+                        <?php
+                            echo getSelect("task",
+                                array(
+                                    "tools_editdetails_player"=>"Player",
+                                    "tools_editdetails_clan"=>"Clan"
+                                )
+                            );
+                        ?>
+                    </td>
+                </tr>
+                <tr style="vertical-align:middle;" class="bg1">
+                    <td nowrap="nowrap" style="width:30%;">ID Number:</td>
+                    <td style="width:70%;">
+                        <input type="text" name="id" size="15" maxlength="12" class="textbox">
+                    </td>
+                </tr>
+                <tr class="bg1">
+                    <td colspan="2" style="text-align:center;">
+                        <input type="submit" value=" Edit &gt;&gt; " class="submit" />
+                    </td>
+                </tr>
+            </table>
+        </form>
+    </div>
+</div><br /><br />
 
 <?php
     require(PAGE_PATH . "/search-class.php");
-    
+
     // PHP 8 Fix: Ensure string type and existence
     $sr_query = isset($_GET["q"]) ? (string)$_GET["q"] : "";
-    
+
     $search_pattern  = array("/script/i", "/;/", "/%/");
     $replace_pattern = array("", "", "");
     $sr_query = preg_replace($search_pattern, $replace_pattern, $sr_query);
@@ -126,19 +107,19 @@ For support and installation notes visit http://www.hlxcommunity.com
 
     $game_input = isset($_GET["game"]) ? $_GET["game"] : "";
     $sr_game = valid_request($game_input, false);
-    
+
     $search = new Search($sr_query, $sr_type, $sr_game);
-    
+
     $search->drawForm(array(
-	"mode"=>"admin",
-	"task"=>$selTask
+        "mode"=>"admin",
+        "task"=>$selTask
     ));
-    
+
     if ($sr_query)
     {
-	$search->drawResults(
-	    "mode=admin&task=tools_editdetails_player&id=%k",
-	    "mode=admin&task=tools_editdetails_clan&id=%k"
-	);
+        $search->drawResults(
+            "mode=admin&task=tools_editdetails_player&id=%k",
+            "mode=admin&task=tools_editdetails_clan&id=%k"
+        );
     }
 ?>

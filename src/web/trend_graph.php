@@ -38,6 +38,13 @@
 
     define('IN_HLSTATS', true);
 
+    ini_set('display_errors', 0);
+    error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING & ~E_DEPRECATED);
+
+    if (ob_get_level() == 0) {
+        ob_start();
+    }
+
     // Load database classes
     require ('config.php');
     require (INCLUDE_PATH . '/class_db.php');
@@ -55,23 +62,34 @@
     $g_options = getOptions();
     
     $bg_color = array('red' => 90, 'green' => 90, 'blue' => 90);
-    if (isset($_GET['bgcolor']) && is_string($_GET['bgcolor'])) {
-	$bg_color = hex2rgb(valid_request((string)$_GET['bgcolor'], false));
+    if (!empty($_GET['bgcolor']) && is_string($_GET['bgcolor'])) {
+        $clean_bg = trim($_GET['bgcolor']);
+        if (preg_match('/^[a-fA-F0-9]{3,6}$/', $clean_bg)) {
+            $parsed_bg = hex2rgb($clean_bg);
+            if (is_array($parsed_bg) && isset($parsed_bg['red'])) {
+                $bg_color = $parsed_bg;
+            }
+        }
     }
 
     $color = array('red' => 213, 'green' => 217, 'blue' => 221);
-    if (isset($_GET['color']) && is_string($_GET['color'])) {
-	$color = hex2rgb(valid_request((string)$_GET['color'], false));
+    if (!empty($_GET['color']) && is_string($_GET['color'])) {
+        $clean_color = trim($_GET['color']);
+        if (preg_match('/^[a-fA-F0-9]{3,6}$/', $clean_color)) {
+            $parsed_color = hex2rgb($clean_color);
+            if (is_array($parsed_color) && isset($parsed_color['red'])) {
+                $color = $parsed_color;
+            }
+        }
     }
 
     // PHP 8 Fix: Null coalescing and casting
-    $player_in = isset($_GET['player']) ? $_GET['player'] : '';
-    $player = valid_request((int)$player_in, true);
-    if (!$player) {
+    $player = isset($_GET['player']) ? (int)$_GET['player'] : 0;
+    if ($player <= 0) {
 	exit();
     }
-    
-    $res = $db->query("SELECT UNIX_TIMESTAMP(eventTime) AS ts, skill, skill_change FROM hlstats_Players_History WHERE playerId = '$player' ORDER BY eventTime DESC LIMIT 30");
+
+    $res = $db->query("SELECT UNIX_TIMESTAMP(eventTime) AS ts, skill, skill_change FROM hlstats_Players_History WHERE playerId = {$player} ORDER BY eventTime DESC LIMIT 30");
     $skill = array();
     $skill_change = array();
     $date = array();
@@ -100,16 +118,21 @@
 	}
     }
     
+    $update_interval = defined('IMAGE_UPDATE_INTERVAL') ? IMAGE_UPDATE_INTERVAL : 3600;
     $cache_image = IMAGE_PATH . "/progress/trend_{$player}_{$last_time}.png";
+
     if (file_exists($cache_image))
     {
-	$file_timestamp = @filemtime($cache_image);
-	if ($file_timestamp + IMAGE_UPDATE_INTERVAL > time()) {
-	    header('Content-type: image/png');
-	    // header("Cache-Control: public, s-maxage=" . IMAGE_UPDATE_INTERVAL . ", max-age=" . IMAGE_UPDATE_INTERVAL); // Cache it in the browser
-	    readfile($cache_image);
-	    exit();
-	}
+        $file_timestamp = @filemtime($cache_image);
+        if ($file_timestamp && ($file_timestamp + $update_interval > time())) {
+            if (ob_get_length()) {
+                ob_clean();
+            }
+            header('Content-type: image/png');
+            header('Cache-Control: public, max-age=' . $update_interval);
+            readfile($cache_image);
+            exit();
+        }
     }
     
     // Ensure pChart works
@@ -117,6 +140,8 @@
         // Fallback or error handling if pChart is missing
         exit('pChart library missing');
     }
+
+    $font_path = IMAGE_PATH . '/sig/font/DejaVuSans.ttf';
 
     $Chart = new pChart(380, 200);
     $Chart->drawBackground($bg_color['red'], $bg_color['green'], $bg_color['blue']);
@@ -126,7 +151,9 @@
     
     if (count($date) < 2)
     {
-	$Chart->setFontProperties(IMAGE_PATH . '/sig/font/DejaVuSans.ttf', 11);
+	if (file_exists($font_path)) {
+	    $Chart->setFontProperties($font_path, 11);
+	}
 	$Chart->drawTextBox(100, 90, 180, 110, "Not Enough Session Data", 0, 0, 0, 0, ALIGN_LEFT, FALSE, 255, 255, 255, 0);
     }
     else
@@ -140,7 +167,9 @@
 	$DataSet->SetSerieName('Skill', 'SerieSkill');
 	$DataSet->SetSerieName('Session', 'SerieSession');
 
-	$Chart->setFontProperties(IMAGE_PATH . '/sig/font/DejaVuSans.ttf', 7);
+	if (file_exists($font_path)) {
+	    $Chart->setFontProperties($font_path, 7);
+	}
 	$DataSet->SetYAxisName('Skill');
 	$DataSet->SetYAxisUnit('K');
 	$Chart->setColorPalette(0, 255, 255, 0);
@@ -168,14 +197,22 @@
 	$Chart->clearShadow();
 	$Chart->drawPlotGraph($DataSet->GetData(), $DataSet->GetDataDescription(), 1, 1, 255, 255, 255);
 	
-	$Chart->setFontProperties(IMAGE_PATH . '/sig/font/DejaVuSans.ttf',7);
+	if (file_exists($font_path)) {
+	    $Chart->setFontProperties($font_path, 7);
+	}
 	$Chart->drawHorizontalLegend(235, -1, $DataSet->GetDataDescription(),
 	    0, 0, 0, 0, 0, 0, $color['red'], $color['green'], $color['blue'], FALSE);
     }
     
     $Chart->Render($cache_image);
-    // header("Location: $cache_image");
+
+    if (ob_get_length()) {
+        ob_clean();
+    }
+
     header('Content-type: image/png');
-    // header("Cache-Control: public, s-maxage=" . IMAGE_UPDATE_INTERVAL . ", max-age=" . IMAGE_UPDATE_INTERVAL); // Cache it in the browser
+    header('Cache-Control: public, max-age=' . $update_interval);
     readfile($cache_image);
+    exit();
+
 ?>

@@ -19,7 +19,8 @@ Counter-Strike 2 is natively supported: the updated hlstats.pl daemon handles bo
 
 | Date | Description / Feature | Support Status / Additional Information |
 | :--- | :--- | :--- |
-| 2026-07-22 | **Direct Dual-Protocol Log Streaming & SuperLogs v2.4** | **Native HTTP & UDP listening on port 27500. Standalone UDP Forwarder made optional via Docker profile.** |
+| 2026-07-28 | **PHP 8.x compatibility, and Dockerfiles** | **fix(web): PHP 8.x compatibility, GD graphics fixes, security, UI alignment and Dockerfiles** |
+| 2026-07-22 | Direct Dual-Protocol Log Streaming & SuperLogs v2.4 | Native HTTP & UDP listening on port 27500. Standalone UDP Forwarder made optional via Docker profile. |
 | 2026-07-15 | CounterStrikeSharp 1.0.371 & .NET 10 Compatibility Update | Plugin fixes, stability improvements, and responsive UI updates. |
 | 2026-05-16 | CS2 Knife fix (T/CT differentiation) | Correctly logs basic knife as `knife_t` for Terrorists and `knife` for CTs; resolves inaccurate kill stats in SuperLogs |
 | 2026-04-23 | v1.12.3 - AG2 & Hitgroup Fix | Critical update for CS2 AnimGraph 2 engine changes. Restores precise hitgroup logging and stability. |

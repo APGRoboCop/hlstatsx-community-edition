@@ -35,7 +35,12 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 For support and installation notes visit http://www.hlxcommunity.com
 */
+    ini_set('display_errors', 0);
+    error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING & ~E_DEPRECATED);
 
+    if (ob_get_level() == 0) {
+        ob_start();
+    }
     foreach ($_SERVER as $key => $entry) {
         // PHP 8 Fix: Check if entry is string
 	if ($key !== 'HTTP_COOKIE' && is_string($entry)) {
@@ -119,25 +124,31 @@ For support and installation notes visit http://www.hlxcommunity.com
 	$bar_type = valid_request((int)$_GET['type'], true);
     }
 	
+    $clean_game_file = preg_replace('/[^a-zA-Z0-9_\-]/', '', $game);
+
     $selectedStyle = (isset($_COOKIE['style']) && $_COOKIE['style']) ? $_COOKIE['style'] : $g_options['style'];
 
-    
-    // Determine if we have custom nav images available
-    $selectedStyle = preg_replace('/\.css$/','',$selectedStyle);
-    
+    $selectedStyle = preg_replace('/[^a-zA-Z0-9_\-]/', '', preg_replace('/\.css$/i', '', $selectedStyle));
+
     $iconpath = IMAGE_PATH . "/icons";
-    if (file_exists($iconpath . "/" . $selectedStyle)) {
-	$iconpath = $iconpath . "/" . $selectedStyle;
-    }		
+    if (!empty($selectedStyle) && file_exists($iconpath . "/" . $selectedStyle)) {
+        $iconpath = $iconpath . "/" . $selectedStyle;
+    }
 
     $bg_color = array('red' => 171, 'green' => 204, 'blue' => 214);
-    if (isset($_GET['bgcolor']) && is_string($_GET['bgcolor'])) {
-	$bg_color = hex2rgb(valid_request($_GET['bgcolor'], false));
+    if (!empty($_GET['bgcolor']) && is_string($_GET['bgcolor'])) {
+        $clean_bg = trim($_GET['bgcolor']);
+        if (preg_match('/^[a-fA-F0-9]{3,6}$/', $clean_bg)) {
+            $bg_color = hex2rgb($clean_bg);
+        }
     }
 
     $color = array('red' => 255, 'green' => 255, 'blue' => 255);
-    if (isset($_GET['color']) && is_string($_GET['color'])) {
-	$color = hex2rgb(valid_request($_GET['color'], false));
+    if (!empty($_GET['color']) && is_string($_GET['color'])) {
+        $clean_color = trim($_GET['color']);
+        if (preg_match('/^[a-fA-F0-9]{3,6}$/', $clean_color)) {
+            $color = hex2rgb($clean_color);
+        }
     }
 
     $bg_id = $bg_color['red'] + $bg_color['green'] + $bg_color['blue'];
@@ -172,28 +183,32 @@ For support and installation notes visit http://www.hlxcommunity.com
 
     if ($bar_type != 2)
     {
-	$cache_image = IMAGE_PATH . '/progress/server_' . $width . '_' . $height . '_' . $bar_type . '_' . $game . '_' . $server_id . '_' . $bg_id . '_' . $server_load_type . '.png';
-	if (file_exists($cache_image))
-	{
-	    $file_timestamp = filemtime($cache_image);
-	    if ($file_timestamp + $update_interval > time())
-	    {
-		if (isset($_SERVER['HTTP_IF_MODIFIED_SINCE']))
-		{
-		    if ( strtotime($_SERVER['HTTP_IF_MODIFIED_SINCE']) + $update_interval > time() )
-		    {
-			header('HTTP/1.0 304 Not Modified');
-			exit;
-		    }
-		}
-		$mod_date = date('D, d M Y H:i:s \G\M\T', $file_timestamp);
-		header('Last-Modified:' . $mod_date);
-		$image = imagecreatefrompng(IMAGE_PATH . '/progress/server_' . $width . '_' . $height . '_' . $bar_type . '_' . $game . '_' . $server_id . '_' . $bg_id . '_' . $server_load_type . '.png');
-		imagepng($image);
-		imagedestroy($image);
-		exit;
-	    }
-	}
+        $cache_image = IMAGE_PATH . '/progress/server_' . $width . '_' . $height . '_' . $bar_type . '_' . $clean_game_file . '_' . $server_id . '_' . $bg_id . '_' . $server_load_type . '.png';
+        if (file_exists($cache_image))
+        {
+            $file_timestamp = @filemtime($cache_image);
+            if ($file_timestamp && ($file_timestamp + $update_interval > time()))
+            {
+                if (isset($_SERVER['HTTP_IF_MODIFIED_SINCE']))
+                {
+                    if ( strtotime($_SERVER['HTTP_IF_MODIFIED_SINCE']) + $update_interval > time() )
+                    {
+                        header('HTTP/1.0 304 Not Modified');
+                        exit;
+                    }
+                }
+                if (ob_get_length()) {
+                    ob_clean();
+                }
+                $mod_date = date('D, d M Y H:i:s \G\M\T', $file_timestamp);
+                header('Content-Type: image/png');
+                header('Last-Modified:' . $mod_date);
+                $image = imagecreatefrompng($cache_image);
+                imagepng($image);
+                imagedestroy($image);
+                exit;
+            }
+        }
     }
 
     $legend_x = 0;
@@ -433,13 +448,13 @@ For support and installation notes visit http://www.hlxcommunity.com
 	    $ts -= 86400;
 	}
 
-	while (($arcount < $deletedays))
-	{
-	    // insert null value
-	    $data_array[] = array('timestamp' => $ts, 'skill' => isset($rowdata['skill']) ? $rowdata['skill'] : 0, 'kills' => 0, 'headshots' => 0, 'deaths' => 0, 'time' => 0);
-	    $ts -= 86400;
-	    $arcount++;
-	}
+        $last_skill = (is_array($rowdata) && isset($rowdata['skill'])) ? $rowdata['skill'] : 0;
+        while (($arcount < $deletedays))
+        {
+            $data_array[] = array('timestamp' => $ts, 'skill' => $last_skill, 'kills' => 0, 'headshots' => 0, 'deaths' => 0, 'time' => 0);
+            $ts -= 86400;
+            $arcount++;
+        }
 
 	$deletedays = count($data_array);
 
@@ -458,28 +473,26 @@ For support and installation notes visit http://www.hlxcommunity.com
 	imagestring($image, 1, $width - $indent_x[1] - $str_width, $indent_y[0] - 11, $str, $font_color);
     }
 
-    imageTrueColorToPalette($image, 0, 65535);
+    imageTrueColorToPalette($image, false, 256);
 
-    // $bar_type=2;
+    if (ob_get_length()) {
+        ob_clean();
+    }
 
-    // achtung, hier ist noch ein pfad hardcoded!!!
     header('Content-Type: image/png');
 
     if ($bar_type != 2)
     {
-	@imagepng($image, IMAGE_PATH . '/progress/server_' . $width . '_' . $height . '_' . $bar_type . '_' . $game . '_' . $server_id . '_' . $bg_id . '_' . $server_load_type . '.png');
-	$mod_date = date('D, d M Y H:i:s \G\M\T', time());
-	header('Last-Modified:'.$mod_date);
-	imagepng($image);
-	imagedestroy($image);
-	//Opera doesn't like the redirect
-	/*$mod_date = date('D, d M Y H:i:s \G\M\T', time());
-	header('Last-Modified:'.$mod_date);
-	header("Location: ".IMAGE_PATH."/progress/server_".$width."_".$height."_".$bar_type."_".$game."_".$server_id."_".$bg_id."_".$server_load_type.".png");*/
+        @imagepng($image, IMAGE_PATH . '/progress/server_' . $width . '_' . $height . '_' . $bar_type . '_' . $clean_game_file . '_' . $server_id . '_' . $bg_id . '_' . $server_load_type . '.png');
+        $mod_date = date('D, d M Y H:i:s \G\M\T', time());
+        header('Last-Modified:' . $mod_date);
+        imagepng($image);
+        imagedestroy($image);
     }
     else
     {
-	imagepng($image);
-	imagedestroy($image);
+        imagepng($image);
+        imagedestroy($image);
     }
+    exit();
 ?>

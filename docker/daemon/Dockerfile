@@ -5,6 +5,8 @@ RUN apt-get update && apt-get install -y \
     cpanminus build-essential libssl-dev zlib1g-dev \
     libmaxminddb-dev netcat-openbsd cron && rm -rf /var/lib/apt/lists/*
 
+RUN sed -i '/pam_loginuid.so/s/^/#/' /etc/pam.d/cron
+
 RUN cpanm --notest Math::Int64 MaxMind::DB::Reader GeoIP2::Database::Reader Syntax::Keyword::Try
 
 RUN useradd -m hlstats

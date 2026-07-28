@@ -78,6 +78,7 @@ class Auth
     function __construct()
     {
     //@session_start();
+        global $db;
         if (session_status() == PHP_SESSION_NONE) {
             session_start();
         }
@@ -95,26 +96,38 @@ class Auth
         if($this->checkPass()==true)
         {
     // if we have success, save it in this users SESSION
+    session_regenerate_id(true);
     $_SESSION['username']=$this->username;
-    $_SESSION['password']=$this->password;
     $_SESSION['authsessionStart']=time();
-    $_SESSION['acclevel'] = isset($this->userdata['acclevel']) ? $this->userdata['acclevel'] : 0;
+    $_SESSION['acclevel'] = isset($this->userdata['acclevel']) ? (int)$this->userdata['acclevel'] : 0;
     $_SESSION['loggedin']=1;
         }
     }
-    elseif (isset($_SESSION['loggedin']))
+    elseif (!empty($_SESSION['loggedin']))
     {
-        $this->username = $_SESSION['username'];
-        $this->password = $_SESSION['password'];
-        $this->savepass = 0;
-        $this->sessionStart = $_SESSION['authsessionStart'];
-        $this->ok = true;
-        $this->error = false;
-        $this->session = true;
-        
-        if(!$this->checkPass())
-        {
-    unset($_SESSION['loggedin']);
+        $this->username = $_SESSION['username'] ?? '';
+        $this->sessionStart = $_SESSION['authsessionStart'] ?? 0;
+
+        if ($this->sessionStart > (time() - 3600)) {
+            $this->ok = true;
+            $this->error = false;
+            $this->session = true;
+            $_SESSION['authsessionStart'] = time();
+
+            if (!empty($this->username) && isset($db)) {
+                $username_esc = $db->escape($this->username);
+                $res = $db->query("SELECT * FROM hlstats_Users WHERE username='$username_esc' LIMIT 1");
+                if ($res && $db->num_rows() == 1) {
+                    $this->userdata = $db->fetch_array();
+                    $db->free_result();
+                    $_SESSION['acclevel'] = (int)($this->userdata['acclevel'] ?? 0);
+                }
+            }
+        } else {
+            unset($_SESSION['loggedin'], $_SESSION['username'], $_SESSION['authsessionStart'], $_SESSION['acclevel']);
+            $this->ok = false;
+            $this->error = 'Your session has expired. Please try again.';
+            $this->printAuth();
         }
     }
     else
@@ -177,7 +190,8 @@ class Auth
                 // Check if column needs expansion
                 $check_sql = $db->query("SHOW COLUMNS FROM `hlstats_Users` LIKE 'password'");
                 $col_info = $db->fetch_array($check_sql);
-                if ($col_info && strpos($col_info['Type'], '32') !== false) {
+                $col_type = (string)($col_info['Type'] ?? $col_info['type'] ?? '');
+                if ($col_info && strpos($col_type, '32') !== false) {
                     $db->query("ALTER TABLE `hlstats_Users` MODIFY `username` varchar(32) NOT NULL default '', MODIFY `password` varchar(255) NOT NULL default ''");
                 }
 
@@ -260,19 +274,20 @@ class Auth
 
     function doCookies()
     {
-    return;
-    setcookie('authusername', $this->username, time() + 31536000, '', '', 0);
-
-    if ($this->savepass)
-    {
-        setcookie('authpassword', $this->password, time() + 31536000, '', '', 0);
-    }
-    else
-    {
-        setcookie('authpassword', $this->password, 0, '', '', 0);
-    }
-    setcookie('authsavepass', $this->savepass, time() + 31536000, '', '', 0);
-    setcookie('authsessionStart', time(), 0, '', '', 0);
+        $cookie_options = array(
+            'expires'  => time() + 31536000,
+            'path'     => '/',
+            'domain'   => '',
+            'secure'   => (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https'),
+            'httponly' => true,
+            'samesite' => 'Lax'
+        );
+        setcookie('authusername', $this->username, $cookie_options);
+        $save_options = $cookie_options;
+        $save_options['expires'] = $this->savepass ? (time() + 31536000) : 0;
+        setcookie('authsavepass', $this->savepass, $save_options);
+        setcookie('authsessionStart', time(), $save_options);
+        setcookie('authpassword', '', time() - 3600, '/');
     }
 
     function printAuth()
@@ -331,6 +346,8 @@ class EditList
     $this->DetailsLink = $DetailsLink;
     $this->helpKey = '';
     $this->deleteCallback = $deleteCallback;
+    $this->errors = array();
+    $this->newerror = false;
     }
 
     function setHelp($div, $key, $texts)
@@ -388,7 +405,7 @@ class EditList
         $post_key = "new_$col->name";
         // PHP 8 Fix: Correctly handle '0' string. !empty() returns false for '0'.
         $raw_value = $_POST[$post_key] ?? null;
-        $value = ($raw_value !== null && $raw_value !== '') ? mystripslashes($raw_value) : '';
+        $value = ($raw_value !== null && $raw_value !== '') ? trim($raw_value) : '';
 
         // MySQL Strict Mode Fix
         if ($value === '' && in_array($col->name, $int_columns)) {
@@ -491,7 +508,7 @@ class EditList
             $raw_value = $_POST[$post_key] ?? null;
             
             if ($raw_value !== null && $raw_value !== '') {
-                $value = mystripslashes($raw_value);
+                $value = $raw_value;
             } else {
                 $value = null;
             }
@@ -501,7 +518,7 @@ class EditList
             $value = '0';
         }
 
-        if ($col->type == 'password' && $value == '(encrypted)')
+        if ($col->type == 'password' && ($value === null || $value === '' || $value == '(encrypted)'))
         {
             continue;
         }
@@ -541,7 +558,7 @@ class EditList
     }
     $query .= " WHERE $this->keycol='" . $db->escape($row) . "'";
 
-    if (!$rowerror)
+    if (!$rowerror && $i > 0)
     {
         $db->query($query);
     }
@@ -775,8 +792,7 @@ class EditList
         {
             $selected = '';
         }
-
-        echo "<option value=\"$k\"$selected>$v</option>\n";
+        echo '<option value="' . htmlspecialchars((string)$k, ENT_QUOTES, 'UTF-8') . '"' . $selected . '>' . htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8') . "</option>\n";
         }
 
         if (!$gotcval && isset($rowdata[$col->name]))
@@ -810,7 +826,7 @@ class EditList
     case 'readonly':
         if (!$new)
         {
-        echo html_entity_decode((string)$rowdata[$col->name]);
+        echo htmlspecialchars((string)($rowdata[$col->name] ?? ''), ENT_QUOTES, 'UTF-8');
         break;
         }
 
@@ -920,9 +936,6 @@ class PropertyPage
     if ($prop->name == 'name')
     {
         $value = isset($_POST[$prop->name]) ? $_POST[$prop->name] : '';
-        $search_pattern = array('/script/i', '/;/', '/%/');
-        $replace_pattern = array('', '', '');
-        $value = preg_replace($search_pattern, $replace_pattern, $value);
         $setstrings[] = $prop->name . "='" . $db->escape($value) . "'";
     }
     else
@@ -1068,6 +1081,7 @@ pageHeader(array('Admin'), array('Admin' => ''));
 
 $selTask = isset($_GET['task']) ? valid_request($_GET['task'], false) : false;
 $selGame = isset($_GET['game']) ? valid_request($_GET['game'], false) : false;
+$mode = isset($_GET['mode']) ? valid_request($_GET['mode'], false) : '';
 ?>
 
 <table width="100%" align="center" border="0" cellspacing="0" cellpadding="0">
@@ -1142,7 +1156,7 @@ $admintasks['tools_settings_copy'] = new AdminTask('Duplicate Game settings', 80
 
 
 // Show Tool
-if (!empty($admintasks[$selTask]) && ($admintasks[$selTask]->type == 'tool' || $admintasks[$selTask]->type == 'subtool'))
+if (!empty($selTask) && !empty($admintasks[$selTask]) && ($admintasks[$selTask]->type == 'tool' || $admintasks[$selTask]->type == 'subtool'))
 {
     $task = $admintasks[$selTask];
 

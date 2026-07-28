@@ -34,6 +34,10 @@ RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-av
 
 RUN a2enmod rewrite headers
 
+RUN cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" && \
+    sed -i 's/display_errors = On/display_errors = Off/g' "$PHP_INI_DIR/php.ini" && \
+    sed -i 's/display_startup_errors = On/display_startup_errors = Off/g' "$PHP_INI_DIR/php.ini"
+
 COPY src/web /var/www/
 RUN find /var/www -type f -name "*.php" -exec sed -i 's/\r$//' {} + && \
     chown -R www-data:www-data /var/www/ \

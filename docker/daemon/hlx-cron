@@ -1,2 +1,5 @@
-15 00 * * * hlstats cd /home/hlstats/scripts && perl hlstats-awards.pl > /proc/1/fd/1 2>&1
-20 00 * * * hlstats cd /home/hlstats/scripts && perl hlstats-resolve.pl > /proc/1/fd/1 2>&1
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+15 00 * * * root su hlstats -c "cd /home/hlstats/scripts && /usr/bin/perl /home/hlstats/scripts/hlstats-awards.pl" > /proc/1/fd/1 2>&1
+20 00 * * * root su hlstats -c "cd /home/hlstats/scripts && /usr/bin/perl /home/hlstats/scripts/hlstats-resolve.pl" > /proc/1/fd/1 2>&1

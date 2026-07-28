@@ -38,38 +38,45 @@ For support and installation notes visit http://www.hlxcommunity.com
 Originally idea for sig.php by Tankster
 */
 
+define('IN_HLSTATS', true);
+
+ini_set('display_errors', 0);
+error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING & ~E_DEPRECATED);
+
+if (ob_get_level() == 0) {
+    ob_start();
+}
+
 foreach ($_SERVER as $key => $entry) {
-    // PHP 8 Fix: Ensure entry is string
     if ($key !== 'HTTP_COOKIE' && is_string($entry)) {
-	$search_pattern  = array('/<script>/', '/<\/script>/', '/[^A-Za-z0-9.\-\/=:;_?#&~]/');
-	$replace_pattern = array('', '', '');
-	$entry = preg_replace($search_pattern, $replace_pattern, $entry);
-  
-	if ($key == 'PHP_SELF') {
+        $search_pattern  = array('/<script>/', '/<\/script>/', '/[^A-Za-z0-9.\-\/=:;_?#&~]/');
+        $replace_pattern = array('', '', '');
+        $entry = preg_replace($search_pattern, $replace_pattern, $entry);
+
+        if ($key == 'PHP_SELF') {
             $last_segment = strrchr($entry, '/');
             if ($last_segment !== false) {
-		if (($last_segment !== '/hlstats.php') &&
-		    ($last_segment !== '/show_graph.php') &&
-		    ($last_segment !== '/sig.php') &&
-		    ($last_segment !== '/sig2.php') &&
-		    ($last_segment !== '/index.php') &&
-		    ($last_segment !== '/status.php') &&
-		    ($last_segment !== '/top10.php') &&
-		    ($last_segment !== '/config.php') &&
-		    ($last_segment !== '/') &&
-		    ($entry !== '')) {
-                    $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
-		    header('Location: http://'.$host.'/hlstats.php');    
-		    exit;
-		}
+                if (($last_segment !== '/hlstats.php') &&
+                    ($last_segment !== '/show_graph.php') &&
+                    ($last_segment !== '/sig.php') &&
+                    ($last_segment !== '/sig2.php') &&
+                    ($last_segment !== '/index.php') &&
+                    ($last_segment !== '/status.php') &&
+                    ($last_segment !== '/top10.php') &&
+                    ($last_segment !== '/config.php') &&
+                    ($last_segment !== '/') &&
+                    ($entry !== '')) {
+                    $raw_host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+                    $host = preg_replace('/[^a-zA-Z0-9.:-]/', '', $raw_host);
+                    $proto = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+                    header('Location: ' . $proto . '://' . $host . '/hlstats.php');
+                    exit;
+                }
             }
-	}
-	$_SERVER[$key] = $entry;
+        }
+        $_SERVER[$key] = $entry;
     }
 }
-  
-define('IN_HLSTATS', true);
-header("Content-Type: image/png");
 
 // Load database classes
 require ('config.php');
@@ -185,43 +192,57 @@ function f_num($number) {
     
     $show_flags = isset($g_options['countrydata']) ? $g_options['countrydata'] : 0;
     if (isset($_GET['show_flags']) && is_numeric($_GET['show_flags'])) {
-	$show_flags = valid_request((int)$_GET['show_flags'], true);
+        $show_flags = valid_request((int)$_GET['show_flags'], true);
     }
 
-    if (file_exists(IMAGE_PATH.'/progress/sig_'.$player_id.'.png')) {
-	$file_timestamp = @filemtime(IMAGE_PATH.'/progress/sig_'.$player_id.'.png');
-	if ($file_timestamp + IMAGE_UPDATE_INTERVAL > time()) {
-	    if (isset($_SERVER['HTTP_IF_MODIFIED_SINCE'])) {
-		$browser_timestamp = strtotime($_SERVER['HTTP_IF_MODIFIED_SINCE']);
-		if ($browser_timestamp + IMAGE_UPDATE_INTERVAL > time()) {
-		    header('HTTP/1.0 304 Not Modified');
-		    exit; 
-		}
-	    }
+    $cache_file = IMAGE_PATH . '/progress/sig_' . $player_id . '.png';
+    if (file_exists($cache_file)) {
+        $file_timestamp = @filemtime($cache_file);
+        if ($file_timestamp && ($file_timestamp + IMAGE_UPDATE_INTERVAL > time())) {
+            if (isset($_SERVER['HTTP_IF_MODIFIED_SINCE'])) {
+                $browser_timestamp = strtotime($_SERVER['HTTP_IF_MODIFIED_SINCE']);
+                if ($browser_timestamp + IMAGE_UPDATE_INTERVAL > time()) {
+                    header('HTTP/1.0 304 Not Modified');
+                    exit;
+                }
+            }
 
-	    $mod_date = date('D, d M Y H:i:s \G\M\T', $file_timestamp);
-	    header('Last-Modified:'.$mod_date);
-            
-            // Output existing image if valid
-            readfile(IMAGE_PATH.'/progress/sig_'.$player_id.'.png');
-	    exit;
-	}  
+            if (ob_get_length()) {
+                ob_clean();
+            }
+            $mod_date = date('D, d M Y H:i:s \G\M\T', $file_timestamp);
+            header('Content-Type: image/png');
+            header('Last-Modified: ' . $mod_date);
+            header('Cache-Control: public, max-age=' . IMAGE_UPDATE_INTERVAL);
+
+            readfile($cache_file);
+            exit();
+        }
     }
 
     ////
     //// Main
     ////
 
-if (isset($_GET['color']) && is_string($_GET['color'])) {
-    $color = hex2rgb(valid_request($_GET['color'], false));
+if (!empty($_GET['color']) && is_string($_GET['color'])) {
+    $clean_c = trim($_GET['color']);
+    if (preg_match('/^[a-fA-F0-9]{3,6}$/', $clean_c)) {
+        $color = hex2rgb($clean_c);
+    }
 }
 
-if (isset($_GET['caption_color']) && is_string($_GET['caption_color'])) {
-    $caption_color = hex2rgb(valid_request($_GET['caption_color'], false));
+if (!empty($_GET['caption_color']) && is_string($_GET['caption_color'])) {
+    $clean_cc = trim($_GET['caption_color']);
+    if (preg_match('/^[a-fA-F0-9]{3,6}$/', $clean_cc)) {
+        $caption_color = hex2rgb($clean_cc);
+    }
 }
 
-if (isset($_GET['link_color']) && is_string($_GET['link_color'])) {
-    $link_color = hex2rgb(valid_request($_GET['link_color'], false));
+if (!empty($_GET['link_color']) && is_string($_GET['link_color'])) {
+    $clean_lc = trim($_GET['link_color']);
+    if (preg_match('/^[a-fA-F0-9]{3,6}$/', $clean_lc)) {
+        $link_color = hex2rgb($clean_lc);
+    }
 }
 
 if ($player_id > 0) {
@@ -320,7 +341,7 @@ if ($player_id > 0) {
     {
 	$hlx_sig = $hlx_sig_image['path'];
     }
-    elseif ($realgame && $hlx_sig_image = getImage('/games/'.$realgame.'/sig/'.$background))
+    elseif (isset($realgame) && $realgame && ($hlx_sig_image = getImage('/games/'.$realgame.'/sig/'.$background)))
     {
 	$hlx_sig = $hlx_sig_image['path'];
     }
@@ -400,22 +421,21 @@ if ($player_id > 0) {
     //$caption_colorb	= imagecolorallocate($image, $caption_colorb['red'], $caption_colorb['green'], $caption_colorb['blue']);
     //$link_colorb		= imagecolorallocate($image, $link_colorb['red'], $link_colorb['green'], $link_colorb['blue']);
 
-
-    $background_img = imagecreatefrompng($hlx_sig);
-
-
-
-    if ($background_img) {
-	imagecopy($image, $background_img, 0, 0, 0, 0, 400, 75);
-	imagedestroy($background_img);
-    }   
+    if (file_exists($hlx_sig)) {
+        $background_img = @imagecreatefrompng($hlx_sig);
+        if ($background_img) {
+            imagecopy($image, $background_img, 0, 0, 0, 0, 400, 75);
+            imagedestroy($background_img);
+        }
+    }
 
     if ($background == 0)
 	imagerectangle($image, 0, 0, 400, 75, $bgray);
 
     $start_header_name = 9;
-    if ($show_flags > 0)  {
-        $flag_path = getFlag($playerdata['flag'], 'path');
+    $player_flag = $playerdata['flag'] ?? '';
+    if ($show_flags > 0 && !empty($player_flag))  {
+        $flag_path = getFlag($player_flag, 'path');
         if ($flag_path && file_exists($flag_path)) {
 	    $flag = imagecreatefromgif($flag_path);
 	    if ($flag) {
@@ -463,7 +483,7 @@ if ($player_id > 0) {
     }
     else
     {
-	imagestring($image, 9, $start_header_name, 2, $playerdata['lastName'], $caption_color);
+	imagestring($image, 5, $start_header_name, 2, $playerdata['lastName'], $caption_color);
     }
 
     imagestring($image, 2, 15, 22, 'Position ', $font_color);
@@ -488,7 +508,9 @@ if ($player_id > 0) {
     imagestring($image, 2, $start_pos_x, 22, $skill_change.') points', $font_color);
     imagestring($image, 2,  15, 34, 'Frags: '.$playerdata['kills'].' kills : '.$playerdata['deaths'].' deaths ('.$playerdata['kpd'].'), '.$playerdata['headshots'].' headshots ('.$playerdata['hpk'].'%)', $font_color);
     imagestring($image, 2,  15, 45, 'Activity: '.$playerdata['lastevent'].' ('.$playerdata['activity'].'%), Time: '.$con_time.' hours', $font_color);
-    imagestring($image, 2,  15, 56, 'Statistics: ', $font_color);imagestring($image, 2,  85, 56, $g_options['siteurl'], $link_color);
+    $site_url = $g_options['siteurl'] ?? $g_options['scripturl'] ?? '';
+    imagestring($image, 2, 15, 56, 'Statistics: ', $font_color);
+    imagestring($image, 2, 85, 56, $site_url, $link_color);
 
     if (file_exists(IMAGE_PATH.'/watermark.png')) {
         $watermark = imagecreatefrompng(IMAGE_PATH.'/watermark.png');
@@ -497,11 +519,19 @@ if ($player_id > 0) {
     }
     
     $mod_date = date('D, d M Y H:i:s \G\M\T', time());
-    Header('Last-Modified:'.$mod_date);
+    
+    @imagepng($image, IMAGE_PATH . '/progress/sig_' . $player_id . '.png');
 
-    imagepng($image,IMAGE_PATH.'/progress/sig_'.$player_id.'.png');
+    if (ob_get_length()) {
+        ob_clean();
+    }
+
+    header('Content-Type: image/png');
+    header('Last-Modified: ' . $mod_date);
+    header('Cache-Control: public, max-age=' . IMAGE_UPDATE_INTERVAL);
+
     imagepng($image);
     imagedestroy($image);
-
-}   
+    exit();
+}
 ?>
