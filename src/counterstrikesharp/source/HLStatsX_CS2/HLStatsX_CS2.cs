@@ -47,7 +47,7 @@ public class HLXSession
 public class HLStatsX_CS2 : BasePlugin, IPluginConfig<HLXConfig>
 {
     public override string ModuleName => "HLStatsX Modern Interface";
-    public override string ModuleVersion => "1.1";
+    public override string ModuleVersion => "1.2";
     public override string ModuleAuthor => "lovasatt";
     public override string ModuleDescription => "Integrates HLStatsX with CS2 for viewing and updating player stats via in-game menu.";
 
@@ -278,11 +278,12 @@ public class HLStatsX_CS2 : BasePlugin, IPluginConfig<HLXConfig>
         session.LastActivity = DateTime.Now;
         string trend = session.LastSkillChange > 0 ? $"<font color='green'>(▲{session.LastSkillChange})</font>" : session.LastSkillChange < 0 ? $"<font color='red'>(▼{Math.Abs(session.LastSkillChange)})</font>" : "<font color='gray'>(–)</font>";
         double accuracy = session.Accuracy;
+        double kd = session.Deaths > 0 ? (double)session.Kills / session.Deaths : session.Kills;
         string multiLineTitle = 
             $"{Localizer["menu.title", $"<font color='yellow'>{Escape(Trunc(player.PlayerName, 20))}</font>"]}<br/>" +
             $"<font color='white'>" +
             $"{Localizer["menu.rank", session.RankPos, Escape(session.RankName)]}<br/>" +
-            $"{Localizer["menu.skill", session.Skill, trend]}<br/>" +
+            $"{Localizer["menu.skill", session.Skill, trend]} | K/D: {kd:F2}<br/>" +
             $"{Localizer["menu.totals", session.Kills, session.Headshots]}<br/>" +
             $"{Localizer["menu.accuracy", accuracy.ToString("F1", System.Globalization.CultureInfo.InvariantCulture)]}<br/>" +
             $"___________________________________</font>";

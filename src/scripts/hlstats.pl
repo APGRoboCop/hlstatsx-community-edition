@@ -1906,8 +1906,8 @@ if ($g_cpanelhack) {
 
 eval {
   require Geo::IP::PurePerl;
+  Geo::IP::PurePerl->import();
 };
-import Geo::IP::PurePerl;
 
 if ($opt_help) {
 	print $usage;
@@ -2031,7 +2031,7 @@ if ($g_log_chat > 0) {
 
 if ($g_global_chat == 1) {
 	&printEvent("HLSTATSX", "Broadcasting public chat to all players is enabled", 1);
-} elsif ($g_gloabl_chat == 2) {
+} elsif ($g_global_chat == 2) {
 	&printEvent("HLSTATSX", "Broadcasting public chat to admins is enabled", 1);
 } else {
 	&printEvent("HLSTATSX", "Broadcasting public chat is disabled", 1);
@@ -2126,7 +2126,7 @@ while ($loop = &getLine()) {
 					        my $chunk;
 					        last unless $client_select->can_read(1);
 					        $client->sysread($chunk, 8192);
-					        last unless length($chunk);
+					        last unless (defined $chunk && length($chunk));
 				    	        $body .= $chunk;
 					    }
 					}
@@ -2237,7 +2237,7 @@ while ($loop = &getLine()) {
 
         	$proxy_s_peerhost = $s_socket->peerhost;
         	$proxy_s_peerport  = $s_socket->peerport;
-        	&printEvent("PROXY", "Detected proxy call from $proxy_s_peerhost:$proxy_s_peerport") if ($d_debug > 2);
+        	&printEvent("PROXY", "Detected proxy call from $proxy_s_peerhost:$proxy_s_peerport") if ($g_debug > 2);
 
         	if ($proxy_key eq $rproxy_key) {
 		$s_output =~ s/PROXY.*PROXY //;
@@ -3793,8 +3793,8 @@ EOT
 					&printEvent("BAN", "Global Ban - ignored");
 				} elsif (!$g_servers{$s_addr}->{ignore_nextban}->{$playerinfo->{"uniqueid"}}) {
 					my $p_steamid  = $playerinfo->{"uniqueid"};
+					my $playerId   = $playerinfo->{"userid"};
 					my $player_obj = lookupPlayer($s_addr, $playerId, $p_steamid);
-					&printEvent("BAN", "Steamid: ".$p_steamid);
 
 					if ($player_obj) {
 						$player_obj->{"is_banned"} = 1;
