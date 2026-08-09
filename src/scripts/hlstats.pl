@@ -3795,6 +3795,7 @@ EOT
 					my $p_steamid  = $playerinfo->{"uniqueid"};
 					my $playerId   = $playerinfo->{"userid"};
 					my $player_obj = lookupPlayer($s_addr, $playerId, $p_steamid);
+					&printEvent("BAN", "Steamid: ".$p_steamid);
 
 					if ($player_obj) {
 						$player_obj->{"is_banned"} = 1;
