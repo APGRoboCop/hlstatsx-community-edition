@@ -47,14 +47,21 @@ For support and installation notes visit http://www.hlxcommunity.com
 	<div style="float:left;vertical-align:top;width:48.5%;">
 	    <table class="data-table">
 	    <tr class="data-table-head">
-		    <td style="vertical-align:top;">Player Profile<br /></td>
+		    <td style="vertical-align:top;">Player Profile<br /><br /></td>
 		    <td style="text-align:center; vertical-align:middle;" rowspan="7" id="player_avatar">
 			<?php
 			    $db->query
 			    ("
 				SELECT
 				    hlstats_PlayerUniqueIds.uniqueId,
-				    CAST(LEFT(hlstats_PlayerUniqueIds.uniqueId,1) AS unsigned) + CAST('76561197960265728' AS unsigned) + CAST(MID(hlstats_PlayerUniqueIds.uniqueId, 3,10)*2 AS unsigned) AS communityId
+				    CASE WHEN hlstats_PlayerUniqueIds.uniqueId LIKE '[U:1:%'
+							THEN CAST('76561197960265728' AS unsigned) + CAST(REPLACE(SUBSTRING_INDEX(hlstats_PlayerUniqueIds.uniqueId,':',-1),']','') AS unsigned)
+						WHEN hlstats_PlayerUniqueIds.uniqueId LIKE 'STEAM\_%'
+							THEN CAST('76561197960265728' AS unsigned) + CAST(SUBSTRING_INDEX(hlstats_PlayerUniqueIds.uniqueId,':',-1) AS unsigned)*2 + 			CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(hlstats_PlayerUniqueIds.uniqueId,':',2),':',-1) AS unsigned)
+						WHEN hlstats_PlayerUniqueIds.uniqueId LIKE '%:%'
+							THEN CAST(LEFT(hlstats_PlayerUniqueIds.uniqueId,1) AS unsigned) + CAST('76561197960265728' AS unsigned) + CAST(MID(hlstats_PlayerUniqueIds.uniqueId,3,10)*2 AS unsigned)
+						ELSE '76561197960265728'
+					END AS communityId
 				FROM
 				    hlstats_PlayerUniqueIds
 				WHERE
@@ -77,6 +84,8 @@ For support and installation notes visit http://www.hlxcommunity.com
 				$curl = curl_init();
 				curl_setopt($curl, CURLOPT_RETURNTRANSFER, 1 );
 				curl_setopt($curl, CURLOPT_URL, $profileUrl);
+                                curl_setopt($curl, CURLOPT_ENCODING, "");
+                                curl_setopt($curl, CURLOPT_USERAGENT, "Mozilla/5.0 (compatible; HLstatsX)");
                                 // Optional: Set timeout to prevent page hang
                                 curl_setopt($curl, CURLOPT_TIMEOUT, 3);
 
@@ -400,7 +409,7 @@ For support and installation notes visit http://www.hlxcommunity.com
 	<div style="float:right;vertical-align:top;width:48.5%;">
 	    <table class="data-table">
 		<tr class="data-table-head">
-		    <td style="vertical-align:top;" colspan="3">Statistics Summary<br /></td>
+		    <td style="vertical-align:top;" colspan="3">Statistics Summary<br /><br /></td>
 		</tr>
 		<tr class="bg1">
 		    <td style="width:50%;">Activity:</td>
