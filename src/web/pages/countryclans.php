@@ -86,7 +86,7 @@ For support and installation notes visit http://www.hlxcommunity.com
 	    new TableColumn(
 		'name',
 		'Country',
-		'width=40&flag=1&link=' . urlencode('mode=countryclansinfo&amp;flag=%k&amp;game='.$game)
+		'width=36&flag=1&link=' . urlencode('mode=countryclansinfo&amp;flag=%k&amp;game='.$game)
 	    ),
 	    new TableColumn(
 		'skill',
@@ -94,9 +94,9 @@ For support and installation notes visit http://www.hlxcommunity.com
 		'width=8&skill_change=1&align=right'
 	    ),
 	    new TableColumn(
-		"nummembers",
-		"Members",
-		"width=5&align=right"
+		'nummembers',
+		'Members',
+		'width=10&align=right'
 	    ),
 	    new TableColumn(
 		'activity',
@@ -106,7 +106,7 @@ For support and installation notes visit http://www.hlxcommunity.com
 	    new TableColumn(
 		'connection_time',
 		'Connection Time',
-		'width=13&align=right&type=timestamp'
+		'width=12&align=right&type=timestamp'
 	    ),
 	    new TableColumn(
 		'kills',

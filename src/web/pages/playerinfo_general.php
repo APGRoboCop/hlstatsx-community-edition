@@ -47,7 +47,7 @@ For support and installation notes visit http://www.hlxcommunity.com
 	<div style="float:left;vertical-align:top;width:48.5%;">
 	    <table class="data-table">
 	    <tr class="data-table-head">
-		    <td style="vertical-align:top;">Player Profile<br /><br /></td>
+		    <td style="vertical-align:top;">Player Profile<br /></td>
 		    <td style="text-align:center; vertical-align:middle;" rowspan="7" id="player_avatar">
 			<?php
 			    $db->query
@@ -400,7 +400,7 @@ For support and installation notes visit http://www.hlxcommunity.com
 	<div style="float:right;vertical-align:top;width:48.5%;">
 	    <table class="data-table">
 		<tr class="data-table-head">
-		    <td style="vertical-align:top;" colspan="3">Statistics Summary<br /><br /></td>
+		    <td style="vertical-align:top;" colspan="3">Statistics Summary<br /></td>
 		</tr>
 		<tr class="bg1">
 		    <td style="width:50%;">Activity:</td>
