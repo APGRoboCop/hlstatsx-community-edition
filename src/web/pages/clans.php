@@ -87,19 +87,19 @@ For support and installation notes visit http://www.hlxcommunity.com
 	    (
 		'name',
 		'Clan',
-		'width=25&icon=clan&link=' . urlencode('mode=claninfo&amp;clan=%k')
+		'width=26&icon=clan&link=' . urlencode('mode=claninfo&amp;clan=%k')
 	    ),
 	    new TableColumn
 	    (
 		'tag',
 		'Tag',
-		'width=15&align=center'
+		'width=12&align=center'
 	    ),
 	    new TableColumn
 	    (
 		'skill',
 		'Avg. Points',
-		'width=8&align=right&skill_change=1'
+		'width=10&align=right&skill_change=1'
 	    ),
 	    new TableColumn
 	    (

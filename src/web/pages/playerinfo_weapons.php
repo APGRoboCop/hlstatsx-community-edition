@@ -501,7 +501,7 @@ For support and installation notes visit http://www.hlxcommunity.com
             // Initialize total array to avoid warnings
             $weapon_data['total'] = array(
                 'head' => 0, 'leftarm' => 0, 'rightarm' => 0, 'chest' => 0, 
-                'stomach' => 0, 'leftleg' => 0, 'rightleg' => 0, 'model' => ''
+                'stomach' => 0, 'leftleg' => 0, 'rightleg' => 0, 'generic' => 0, 'model' => ''
             );
             
 	    $css_models = array ('ct', 'ct2', 'ct3', 'ct4', 'ts', 'ts2', 'ts3', 'ts4');
@@ -707,7 +707,7 @@ For support and installation notes visit http://www.hlxcommunity.com
 	</script>
 <?php
 	    $tblWeaponstats2->draw($result, $db->num_rows($result), 100);
-	    $flashlink = IMAGE_PATH.'/hitbox.swf?wname=All+Weapons&amp;head='.$weapon_data['total']['head'].'&amp;rightarm='.$weapon_data['total']['leftarm'].'&amp;leftarm='.$weapon_data['total']['rightarm'].'&amp;chest='.$weapon_data['total']['chest'].'&amp;stomach='.$weapon_data['total']['stomach'].'&amp;rightleg='.$weapon_data['total']['rightleg'].'&amp;leftleg='.$weapon_data['total']['leftleg'].'&amp;generic='.$weapon_data['total']['generic'].'&amp;model='.$start_model.'&amp;numcolor_num=#'.$g_options['graphtxt_load'].'&amp;numcolor_pct=#'.$g_options['graphtxt_load'].'&amp;linecolor=#'.$g_options['graphtxt_load'].'&amp;barcolor=#FFFFFF&amp;barbackground=#000000&amp;textcolor=#FFFFFF&amp;captioncolor=#FFFFFF&amp;textcolor_total=#FFFFFF';
+	    $flashlink = IMAGE_PATH.'/hitbox.swf?wname=All+Weapons&amp;head='.$weapon_data['total']['head'].'&amp;rightarm='.$weapon_data['total']['rightarm'].'&amp;leftarm='.$weapon_data['total']['leftarm'].'&amp;chest='.$weapon_data['total']['chest'].'&amp;stomach='.$weapon_data['total']['stomach'].'&amp;rightleg='.$weapon_data['total']['rightleg'].'&amp;leftleg='.$weapon_data['total']['leftleg'].'&amp;generic='.$weapon_data['total']['generic'].'&amp;model='.$start_model.'&amp;numcolor_num=#'.$g_options['graphtxt_load'].'&amp;numcolor_pct=#'.$g_options['graphtxt_load'].'&amp;linecolor=#'.$g_options['graphtxt_load'].'&amp;barcolor=#FFFFFF&amp;barbackground=#000000&amp;textcolor=#FFFFFF&amp;captioncolor=#FFFFFF&amp;textcolor_total=#FFFFFF';
 ?>
     </div>
     <div style="float:right;vertical-align:top;width:480px;">
