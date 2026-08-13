@@ -1,6 +1,6 @@
 services:
   db:
-    image: mariadb:11.4
+    image: mariadb:11.8
     container_name: hlx-db
     restart: always
     command: --innodb_buffer_pool_size=512M --innodb_flush_log_at_trx_commit=2
