@@ -51,16 +51,26 @@ For support and installation notes visit http://www.hlxcommunity.com
 		    <td style="text-align:center; vertical-align:middle;" rowspan="7" id="player_avatar">
 			<?php
 			    $db->query
-			    ("
-				SELECT
-				    hlstats_PlayerUniqueIds.uniqueId,
-				    CAST(LEFT(hlstats_PlayerUniqueIds.uniqueId,1) AS unsigned) + CAST('76561197960265728' AS unsigned) + CAST(MID(hlstats_PlayerUniqueIds.uniqueId, 3,10)*2 AS unsigned) AS communityId
-				FROM
-				    hlstats_PlayerUniqueIds
-				WHERE
-				    hlstats_PlayerUniqueIds.playerId = '$player'
-			    ");
-			    
+                            ("
+                                SELECT
+                                    hlstats_PlayerUniqueIds.uniqueId,
+                                    CASE 
+                                        WHEN hlstats_PlayerUniqueIds.uniqueId LIKE '7656119%' 
+                                            THEN hlstats_PlayerUniqueIds.uniqueId
+                                        WHEN hlstats_PlayerUniqueIds.uniqueId LIKE '%U:1:%'
+                                            THEN CAST('76561197960265728' AS unsigned) + CAST(REPLACE(REPLACE(SUBSTRING_INDEX(hlstats_PlayerUniqueIds.uniqueId, ':', -1), ']', ''), '[', '') AS unsigned)
+                                        WHEN hlstats_PlayerUniqueIds.uniqueId LIKE 'STEAM\_%'
+                                            THEN CAST('76561197960265728' AS unsigned) + CAST(SUBSTRING_INDEX(hlstats_PlayerUniqueIds.uniqueId, ':', -1) AS unsigned) * 2 + CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(hlstats_PlayerUniqueIds.uniqueId, ':', 2), ':', -1) AS unsigned)
+                                        WHEN hlstats_PlayerUniqueIds.uniqueId LIKE '%:%' AND hlstats_PlayerUniqueIds.uniqueId NOT LIKE '-%'
+                                            THEN CAST(LEFT(hlstats_PlayerUniqueIds.uniqueId, 1) AS unsigned) + CAST('76561197960265728' AS unsigned) + CAST(MID(hlstats_PlayerUniqueIds.uniqueId, 3, 10) * 2 AS unsigned)
+                                        ELSE '76561197960265728'
+                                    END AS communityId
+                                FROM
+                                    hlstats_PlayerUniqueIds
+                                WHERE
+                                    hlstats_PlayerUniqueIds.playerId = '$player'
+                            ");
+			
                             // PHP 8 Fix: Replace list()
                             $row = $db->fetch_row();
                             $uqid = ($row) ? $row[0] : '';
@@ -75,8 +85,10 @@ For support and installation notes visit http://www.hlxcommunity.com
 				$profileUrl = "https://steamcommunity.com/profiles/$coid?xml=1";
 	
 				$curl = curl_init();
-				curl_setopt($curl, CURLOPT_RETURNTRANSFER, 1 );
-				curl_setopt($curl, CURLOPT_URL, $profileUrl);
+                                curl_setopt($curl, CURLOPT_RETURNTRANSFER, 1);
+                                curl_setopt($curl, CURLOPT_URL, $profileUrl);
+                                curl_setopt($curl, CURLOPT_ENCODING, "");
+                                curl_setopt($curl, CURLOPT_USERAGENT, "Mozilla/5.0");
                                 // Optional: Set timeout to prevent page hang
                                 curl_setopt($curl, CURLOPT_TIMEOUT, 3);
 
@@ -204,10 +216,10 @@ For support and installation notes visit http://www.hlxcommunity.com
                                                 <?php
                                                         if ($playerdata['mmrank'])
                                                         {
-                                                                echo '<img src=hlstatsimg/mmranks/' . $playerdata['mmrank'] . '.png alt="rank" style=\"height:20px;width:50px; />';
+								echo '<img src="hlstatsimg/mmranks/' . (int)$playerdata['mmrank'] . '.png" alt="rank" style="height:20px;width:50px;" />';
                                                         }
                                                         else
-				echo '<img src=hlstatsimg/mmranks/0.png alt="rank" style=\"height:20px;width:50px; />';
+								echo '<img src="hlstatsimg/mmranks/0.png" alt="rank" style="height:20px;width:50px;" />';
                                                 ?>
                                         </td>
                                 </tr>
@@ -383,13 +395,13 @@ For support and installation notes visit http://www.hlxcommunity.com
 			    $weaponlink = "<a href=\"hlstats.php?mode=weaponinfo&amp;weapon=$fav_weapon&amp;game=$game\">";
 			    if ($image)
 			    {
-				$cellbody = "\t\t\t\t\t<td style=\"text-align: center\">$weaponlink<img src=\"" . $image['url'] . "\" alt=\"$weap_name\" title=\"$weap_name\" />";
+				$cellbody = "\t\t\t\t\t<td style=\"text-align: center\">$weaponlink<img src=\"" . $image['url'] . "\" alt=\"$weap_name\" title=\"$weap_name\" /></a>";
 			    }
 			    else
 			    {
-				$cellbody = "\t\t\t\t\t<td><strong> $weaponlink$weap_name</strong>";
+				$cellbody = "\t\t\t\t\t<td>$weaponlink<strong>$weap_name</strong></a>";
 			    }
-			    $cellbody .= "</a>";
+			//    $cellbody .= "</a>";
 			    echo $cellbody;
 			?>
 		    </td>

@@ -19,7 +19,8 @@ Counter-Strike 2 is natively supported: the updated hlstats.pl daemon handles bo
 
 | Date | Description / Feature | Support Status / Additional Information |
 | :--- | :--- | :--- |
-| 2026-08-08 | **Daemon Stability & In-Game UI Refinement** | **fix(daemon): Banid lookup, GeoIP safety & typos; feat(plugin): inline K/D ratio display** |
+| 2026-08-13 | **Avatar Fixes, Docker MariaDB 11.8 LTS & Lock Prevention** | **fix(web): SteamID3 avatars, cURL gzip & HTML syntax; perf(db): MariaDB 11.8 & temporary table locks** |
+| 2026-08-08 | Daemon Stability & In-Game UI Refinement | fix(daemon): Banid lookup, GeoIP safety & typos; feat(plugin): inline K/D ratio display |
 | 2026-07-28 | PHP 8.x compatibility, and Dockerfiles | fix(web): PHP 8.x compatibility, GD graphics fixes, security, UI alignment and Dockerfiles |
 | 2026-07-22 | Direct Dual-Protocol Log Streaming & SuperLogs v2.4 | Native HTTP & UDP listening on port 27500. Standalone UDP Forwarder made optional via Docker profile. |
 | 2026-07-15 | CounterStrikeSharp 1.0.371 & .NET 10 Compatibility Update | Plugin fixes, stability improvements, and responsive UI updates. |
